@@ -13,8 +13,19 @@
   };
   const CURRENCIES = ['TWD', 'NZD', 'JPY', 'KRW', 'USD', 'EUR', 'THB', 'HKD', 'CNY', 'SGD', 'GBP'];
   const CABINS = ['經濟艙', '豪華經濟艙', '商務艙', '頭等艙'];
+  const CURRENCY_NAMES = {
+    TWD: '台幣', NZD: '紐幣', JPY: '日圓', KRW: '韓元', USD: '美元', EUR: '歐元',
+    THB: '泰銖', HKD: '港幣', CNY: '人民幣', SGD: '新幣', GBP: '英鎊',
+  };
+
+  const PREP_GROUPS = [
+    { key: 'packing', label: '攜帶物品', placeholder: '新增物品，例：轉接頭' },
+    { key: 'passport', label: '護照', placeholder: '新增項目，例：護照影本' },
+    { key: 'visa', label: '簽證與入境資料', placeholder: '新增項目，例：NZeTA 電子旅行授權' },
+  ];
 
   const app = document.getElementById('app');
+  const tabbar = document.getElementById('tabbar');
   const sheet = document.getElementById('sheet');
   const toastEl = document.getElementById('toast');
 
@@ -32,6 +43,12 @@
     alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
     pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
     chevron: '<path d="m9 18 6-6-6-6"/>',
+    home: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    checks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+    bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
   };
 
   const icon = (name, size = 20) =>
@@ -62,6 +79,8 @@
   }
 
   const state = load();
+  // 個人資料（預算、購買清單）跟旅程分開存，之後兩台手機同步時只同步 trips，不會給旅伴看到
+  if (!state.personal || typeof state.personal !== 'object') state.personal = {};
 
   // ---------- Utils ----------
 
@@ -131,6 +150,8 @@
   }
 
   const findTrip = (id) => state.trips.find((t) => t.id === id);
+  // 旅程人數：舊資料沒有這個欄位，預設 2 人（本人＋旅伴）
+  const travelersOf = (trip) => (Number.isInteger(trip.travelers) && trip.travelers >= 1 ? trip.travelers : 2);
 
   function touch(trip) {
     trip.updatedAt = nowISO();
@@ -155,9 +176,9 @@
 
   // 破壞性操作前先拍快照，toast 提供復原，取代確認對話框
   function snapshot() {
-    const before = JSON.stringify(state.trips);
+    const before = JSON.stringify({ trips: state.trips, personal: state.personal });
     return () => {
-      state.trips = JSON.parse(before);
+      Object.assign(state, JSON.parse(before));
       save();
       render();
     };
@@ -165,8 +186,10 @@
 
   // ---------- Routing ----------
   // #/                 首頁：現在時間、機票、當下行程
+  // #/prep             準備清單
+  // #/shop             購買清單與預算
   // #/trips            旅程列表
-  // #/trip/:id/:day    旅程詳情（day 從 0 起算）
+  // #/trip/:id/:day    旅程詳情（day 從 0 起算）＝「行程」分頁
 
   function parseRoute() {
     const parts = location.hash.replace(/^#\/?/, '').split('/');
@@ -174,11 +197,14 @@
       return { name: 'trip', id: decodeURIComponent(parts[1]), day: Number(parts[2]) || 0 };
     }
     if (parts[0] === 'trips') return { name: 'list' };
+    if (parts[0] === 'prep') return { name: 'prep' };
+    if (parts[0] === 'shop') return { name: 'shop' };
     return { name: 'home' };
   }
 
   const tripHref = (trip, day = 0) => `#/trip/${encodeURIComponent(trip.id)}/${day}`;
   const clampDay = (trip, day) => Math.min(Math.max(day, 0), trip.days.length - 1);
+  const todayIndex = (trip) => Math.max(trip.days.findIndex((d) => d.date === todayISO()), 0);
 
   function render() {
     const route = parseRoute();
@@ -189,16 +215,61 @@
         location.hash = '#/trips';
         return;
       }
+      // 從旅程列表點進哪一趟，其他分頁就跟著顯示那一趟
+      if (state.currentTripId !== trip.id) {
+        state.currentTripId = trip.id;
+        save();
+      }
       renderTrip(trip, clampDay(trip, route.day));
     } else if (route.name === 'list') {
       renderList();
+    } else if (route.name === 'prep') {
+      renderPrep();
+    } else if (route.name === 'shop') {
+      renderShop();
     } else {
       renderHome();
     }
+    renderTabbar(route);
+  }
+
+  // ---------- 標籤列 ----------
+
+  function renderTabbar(route) {
+    const trip = currentTrip();
+    const tabs = [
+      { name: 'home', label: '首頁', icon: 'home', href: '#/' },
+      { name: 'prep', label: '準備清單', icon: 'checks', href: '#/prep' },
+      { name: 'trip', label: '行程', icon: 'calendar', href: trip ? tripHref(trip, todayIndex(trip)) : '#/trips' },
+      { name: 'shop', label: '購買・預算', icon: 'bag', href: '#/shop' },
+    ];
+    tabbar.innerHTML = `<div class="tabbar-inner">${tabs.map((t) => `
+      <a class="tab" href="${t.href}"${t.name === route.name ? ' aria-current="page"' : ''}>
+        ${icon(t.icon, 22)}<span>${t.label}</span>
+      </a>`).join('')}</div>`;
+  }
+
+  // 沒有旅程時，準備清單、購買・預算共用的空狀態
+  function noTripEmpty(title) {
+    return `
+      <header class="page-head"><div><h1>${title}</h1></div></header>
+      <div class="empty">
+        <strong>還沒有旅程</strong>
+        <p>先建立一趟旅程，才能開始整理。</p>
+        <div class="empty-actions">
+          <button class="btn primary" type="button" data-action="new-trip">${icon('plus', 18)}建立旅程</button>
+          <button class="btn secondary" type="button" data-action="load-sample">看範例行程</button>
+        </div>
+      </div>`;
   }
 
   // ---------- 首頁 ----------
   // 打開 App 第一眼：現在時間 → 機票 → 當下行程
+
+  // 使用者選過的旅程優先；沒有的話自動挑
+  function currentTrip() {
+    return findTrip(state.currentTripId) || homeTrip();
+  }
 
   // 旅途中 > 最近要出發 > 最近結束
   function homeTrip() {
@@ -231,7 +302,7 @@
   function renderHome() {
     document.title = 'TravelPlan 行程規劃';
     const today = todayISO();
-    const trip = homeTrip();
+    const trip = currentTrip();
 
     const clock = `
       <section class="home-clock" aria-label="現在時間">
@@ -245,7 +316,6 @@
           ${homeTop()}
           ${clock}
           <div class="empty home-empty">
-            <div class="empty-icon">${icon('plane', 24)}</div>
             <strong>還沒有旅程</strong>
             <p>建立一趟旅程，加入機票和每日行程後，打開 App 就能看到下一班飛機和現在該做什麼。</p>
             <div class="empty-actions">
@@ -333,6 +403,7 @@
         <span class="now-title">${esc(a.title)}</span>
         ${a.location?.name ? `<span class="activity-meta">${icon('pin', 14)}<span>${esc(a.location.name)}</span></span>` : ''}
         ${isNow && a.note ? `<span class="activity-note">${esc(a.note)}</span>` : ''}
+        ${costTag(a, trip)}
       </a>`;
   }
 
@@ -352,6 +423,171 @@
         render();
       }
     }, 1000);
+  }
+
+  // ---------- 準備清單 ----------
+  // 全部用勾選，App 不做判斷
+
+  function prepOf(trip) {
+    if (!trip.prep) {
+      trip.prep = { packing: [], passport: [{ id: uid(), text: '護照效期已確認', done: false }], visa: [] };
+    }
+    return trip.prep;
+  }
+
+  function renderPrep() {
+    document.title = '準備清單 · TravelPlan';
+    const trip = currentTrip();
+    if (!trip) {
+      app.innerHTML = noTripEmpty('準備清單');
+      return;
+    }
+    const prep = prepOf(trip);
+    const all = PREP_GROUPS.flatMap((g) => prep[g.key]);
+    const done = all.filter((x) => x.done).length;
+    const pct = all.length ? Math.round((done / all.length) * 100) : 0;
+
+    app.innerHTML = `
+      <header class="page-head">
+        <div>
+          <h1>準備清單</h1>
+          <p>${esc(trip.title)} · ${tripStatus(trip).label}</p>
+        </div>
+      </header>
+
+      <div class="prep-progress">
+        <div class="prep-progress-text"><span>已完成</span><strong>${done} / ${all.length}</strong></div>
+        <div class="progress" role="progressbar" aria-label="準備進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+          <span style="width:${pct}%"></span>
+        </div>
+      </div>
+
+      ${PREP_GROUPS.map((g) => checkGroup(g, prep[g.key])).join('')}
+    `;
+  }
+
+  function checkGroup(g, items) {
+    const done = items.filter((x) => x.done).length;
+    return `
+      <section class="check-group" aria-labelledby="group-${g.key}">
+        <div class="check-group-head">
+          <h2 id="group-${g.key}">${g.label}</h2>
+          <span class="check-count">${done} / ${items.length}</span>
+        </div>
+        ${items.length ? `<ul class="check-list">${items.map((x) => `
+          <li class="check-item">
+            <label>
+              <input type="checkbox" data-check="${g.key}" data-id="${esc(x.id)}"${x.done ? ' checked' : ''}>
+              <span>${esc(x.text)}</span>
+            </label>
+            <button class="icon-btn subtle" type="button" data-action="check-delete" data-group="${g.key}" data-id="${esc(x.id)}" aria-label="刪除「${esc(x.text)}」">${icon('trash', 18)}</button>
+          </li>`).join('')}</ul>` : ''}
+        <form class="check-add" data-group="${g.key}">
+          <input name="text" maxlength="80" placeholder="${g.placeholder}" autocomplete="off" aria-label="新增到${g.label}">
+          <button class="btn secondary small" type="submit">${icon('plus', 16)}新增</button>
+        </form>
+      </section>`;
+  }
+
+  // ---------- 購買清單與預算 ----------
+
+  // 預算用台幣 + 目的地貨幣
+  const budgetCurrencies = (trip) => [...new Set(['TWD', trip.currency])];
+  const curName = (c) => `${CURRENCY_NAMES[c] || c} ${c}`;
+
+  function personalOf(trip) {
+    if (!state.personal[trip.id]) state.personal[trip.id] = { carried: {}, shopping: [] };
+    return state.personal[trip.id];
+  }
+
+  // 購買清單：勾了「已買」的才算
+  function shopSpentIn(p, c) {
+    return p.shopping.filter((x) => x.done && x.currency === c).reduce((s, x) => s + (x.price || 0), 0);
+  }
+
+  // 行程：活動上有填花費的都算（包含住宿），幣別是旅程設定的幣別。行程上顯示全額，這裡回傳全額
+  function tripSpentIn(trip, c) {
+    if (trip.currency !== c) return 0;
+    return trip.days.reduce((s, d) => s + d.activities.reduce((t, a) => t + (a.cost || 0), 0), 0);
+  }
+
+  function renderShop() {
+    document.title = '購買・預算 · TravelPlan';
+    const trip = currentTrip();
+    if (!trip) {
+      app.innerHTML = noTripEmpty('購買・預算');
+      return;
+    }
+    const p = personalOf(trip);
+    const currencies = budgetCurrencies(trip);
+    const bought = p.shopping.filter((x) => x.done).length;
+
+    const budgetCard = (c) => {
+      const carried = p.carried[c] || 0;
+      // 行程花費是大家共用的，除以人數才是個人負擔；購買清單本來就是個人的，不用除
+      const people = travelersOf(trip);
+      const tripTotal = tripSpentIn(trip, c);
+      const fromTrip = tripTotal / people;
+      const fromShop = shopSpentIn(p, c);
+      const spent = fromTrip + fromShop;
+      const left = carried - spent;
+      const pct = carried > 0 ? Math.min(100, Math.round((spent / carried) * 100)) : 0;
+      return `
+        <section class="budget-card" aria-label="${curName(c)}">
+          <div class="budget-head">
+            <h2>${curName(c)}</h2>
+            <span class="budget-left${left < 0 ? ' over' : ''}">${left < 0 ? '超支' : '剩下'} ${fmtMoney(Math.abs(left), c)}</span>
+          </div>
+          <div class="budget-row">
+            <label class="budget-field"><span>帶了</span>
+              <input type="number" min="0" step="any" inputmode="decimal" data-carried="${c}" value="${carried || ''}" placeholder="0">
+            </label>
+            <div class="budget-field"><span>花了</span><strong>${fmtMoney(spent, c)}</strong></div>
+          </div>
+          <p class="budget-breakdown">行程 ${fmtMoney(fromTrip, c)}${tripTotal && people > 1 ? `（全額 ${fmtMoney(tripTotal, c)} ÷ ${people} 人）` : ''} · 購買 ${fmtMoney(fromShop, c)}</p>
+          <div class="progress${left < 0 ? ' over' : ''}" role="progressbar" aria-label="${curName(c)} 已花比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}">
+            <span style="width:${left < 0 ? 100 : pct}%"></span>
+          </div>
+        </section>`;
+    };
+
+    app.innerHTML = `
+      <header class="page-head">
+        <div>
+          <h1>購買・預算</h1>
+          <p>${esc(trip.title)} · 只存在這支手機，不會給旅伴看</p>
+        </div>
+      </header>
+
+      <div class="budget-grid">${currencies.map(budgetCard).join('')}</div>
+
+      <section class="check-group" aria-labelledby="group-shop">
+        <div class="check-group-head">
+          <h2 id="group-shop">購買清單</h2>
+          <span class="check-count">已買 ${bought} / ${p.shopping.length}</span>
+        </div>
+        ${p.shopping.length ? `<ul class="check-list">${p.shopping.map((x) => `
+          <li class="check-item">
+            <label>
+              <input type="checkbox" data-buy="${esc(x.id)}"${x.done ? ' checked' : ''}>
+              <span>${esc(x.name)}</span>
+            </label>
+            <span class="shop-price">${x.price != null ? fmtMoney(x.price, x.currency) : '—'}</span>
+            <button class="icon-btn subtle" type="button" data-action="shop-delete" data-id="${esc(x.id)}" aria-label="刪除「${esc(x.name)}」">${icon('trash', 18)}</button>
+          </li>`).join('')}</ul>` : ''}
+        <form class="shop-add">
+          <input name="name" maxlength="60" placeholder="品名，例：麥蘆卡蜂蜜" autocomplete="off" aria-label="品名">
+          <div class="shop-add-row">
+            <input name="price" type="number" min="0" step="any" inputmode="decimal" placeholder="價格" aria-label="價格">
+            ${currencies.length > 1
+              ? `<select name="currency" aria-label="幣別">${currencies.map((c) => `<option value="${c}"${c === trip.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`
+              : `<input type="hidden" name="currency" value="${currencies[0]}">`}
+            <button class="btn secondary small" type="submit">${icon('plus', 16)}新增</button>
+          </div>
+          <p class="form-error" role="alert" hidden></p>
+        </form>
+        <p class="shop-hint">行程上填的花費（包含住宿），以及這裡勾選「已買」的項目，都會算進上方的「花了」。</p>
+      </section>`;
   }
 
   // ---------- 機票（登機證樣式） ----------
@@ -409,6 +645,10 @@
               ${field('登機門', f.gate)}
               ${field('座位', f.seat)}
             </dl>
+            <label class="bp-check">
+              <input type="checkbox" data-flight-check="${esc(f.id)}"${f.fastTrack ? ' checked' : ''}>
+              <span>入境可走快速通關</span>
+            </label>
           </div>
           <div class="bp-stub">
             <div class="bp-stub-head">${esc(f.flightNo)}</div>
@@ -440,7 +680,6 @@
       ${trips.length
         ? `<ul class="trip-grid">${trips.map(tripCard).join('')}</ul>`
         : `<div class="empty">
-             <div class="empty-icon">${icon('plane', 24)}</div>
              <strong>還沒有旅程</strong>
              <p>建立一趟旅程，選好日期後就能逐日安排景點、餐廳與交通。</p>
              <div class="empty-actions">
@@ -495,6 +734,15 @@
           : `<div class="empty compact"><p>加入機票後，打開 App 首頁就會顯示下一班飛機。</p></div>`}
       </section>
 
+      <div class="trip-search" role="search">
+        <label class="search-field">
+          ${icon('search', 18)}
+          <input type="search" id="trip-search" value="${esc(searchQuery)}" placeholder="查詢行程：名稱、地點、備註" autocomplete="off" aria-label="查詢行程">
+        </label>
+      </div>
+      <div id="search-results" hidden></div>
+
+      <div id="day-view">
       <nav class="day-tabs" aria-label="選擇日期">
         ${trip.days.map((d, i) => `
           <a class="day-tab${i === dayIdx ? ' active' : ''}" href="${tripHref(trip, i)}"${i === dayIdx ? ' aria-current="page"' : ''}>
@@ -512,19 +760,20 @@
         ${day.activities.length
           ? `<ol class="timeline" id="activity-list">${day.activities.map((a) => activityItem(a, trip)).join('')}</ol>`
           : `<div class="empty">
-               <div class="empty-icon">${icon('calendar', 24)}</div>
                <strong>這天還沒有安排</strong>
-               <p>新增景點、餐廳或交通。加入多個活動後，按住左側把手可以拖曳調整順序。</p>
+               <p>新增景點、三餐、住宿或交通。有填開始時間的活動會自動依時間排好；沒填時間的放在最後，可以按住左側把手拖曳調整。</p>
              </div>`}
 
         ${dayCost > 0 ? `<div class="day-summary"><span>本日花費</span><strong>${fmtMoney(dayCost, trip.currency)}</strong></div>` : ''}
 
         <button class="btn primary block" type="button" data-action="new-activity">${icon('plus', 20)}新增活動</button>
       </section>
+      </div>
     `;
 
     const active = app.querySelector('.day-tab.active');
     if (active) active.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (searchQuery) showSearch(trip);
 
     const list = document.getElementById('activity-list');
     if (list) {
@@ -536,21 +785,78 @@
     }
   }
 
+  // 有花費的活動加上標註；這些花費會算進「購買・預算」的花了多少
+  const costTag = (a, trip) =>
+    a.cost ? `<span class="cost-tag">${icon('wallet', 14)}<span>花費 ${fmtMoney(a.cost, trip.currency)}</span></span>` : '';
+
+  // 有開始時間的依時間排，沒有時間的保持原順序放在最後
+  function sortByTime(list) {
+    const timed = list.filter((a) => a.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return [...timed, ...list.filter((a) => !a.startTime)];
+  }
+
+  // ---------- 查詢行程 ----------
+  // 在整趟旅程的所有天裡找名稱、地點、備註、類型
+
+  let searchQuery = '';
+
+  function showSearch(trip) {
+    const results = document.getElementById('search-results');
+    const dayView = document.getElementById('day-view');
+    const q = searchQuery.trim().toLowerCase();
+    results.hidden = !q;
+    dayView.hidden = !!q;
+    if (!q) return;
+
+    const hits = [];
+    trip.days.forEach((d, dayIdx) => d.activities.forEach((a) => {
+      const text = [a.title, a.location?.name, a.note, TYPES[a.type]].filter(Boolean).join(' ').toLowerCase();
+      if (text.includes(q)) hits.push({ a, d, dayIdx });
+    }));
+
+    results.innerHTML = hits.length
+      ? `<p class="search-count" role="status">找到 ${hits.length} 個行程</p>
+         <div class="now-list">${hits.map(({ a, d, dayIdx }) => {
+           const type = TYPES[a.type] ? a.type : 'other';
+           return `
+             <a class="now-card search-hit" href="${tripHref(trip, dayIdx)}" data-type="${type}">
+               <span class="now-top">
+                 <span class="now-label">Day ${dayIdx + 1} · ${fmtShort(d.date)}</span>
+                 <span class="type-tag">${TYPES[type]}</span>
+               </span>
+               <span class="now-time">${esc(fmtTime(a))}</span>
+               <span class="now-title">${esc(a.title)}</span>
+               ${a.location?.name ? `<span class="activity-meta">${icon('pin', 14)}<span>${esc(a.location.name)}</span></span>` : ''}
+               ${costTag(a, trip)}
+             </a>`;
+         }).join('')}</div>`
+      : `<div class="empty compact" role="status"><p>找不到和「${esc(searchQuery.trim())}」有關的行程。</p></div>`;
+  }
+
+  // 時間軸左欄：開始時間在上、結束時間在下
+  function actTime(a) {
+    if (a.startTime) return `<span>${esc(a.startTime)}</span>${a.endTime ? `<span class="end">${esc(a.endTime)}</span>` : ''}`;
+    if (a.endTime) return `<span class="end">～${esc(a.endTime)}</span>`;
+    return '<span class="none">未定</span>';
+  }
+
   function activityItem(a, trip) {
     const type = TYPES[a.type] ? a.type : 'other';
     return `
       <li class="activity" data-id="${esc(a.id)}" data-type="${type}">
-        <button class="drag-handle" type="button" aria-label="拖曳排序：${esc(a.title)}">${icon('grip', 18)}</button>
+        <div class="act-time" aria-hidden="true">${actTime(a)}</div>
+        <div class="act-rail" aria-hidden="true"></div>
         <button class="activity-body" type="button" data-action="edit-activity" data-id="${esc(a.id)}">
+          <span class="sr-only">${esc(fmtTime(a))}</span>
           <span class="activity-top">
-            <span class="activity-time">${esc(fmtTime(a))}</span>
             <span class="type-tag">${TYPES[type]}</span>
           </span>
           <span class="activity-title">${esc(a.title)}</span>
           ${a.location?.name ? `<span class="activity-meta">${icon('pin', 14)}<span>${esc(a.location.name)}</span></span>` : ''}
           ${a.note ? `<span class="activity-note">${esc(a.note)}</span>` : ''}
-          ${a.cost ? `<span class="activity-cost">${fmtMoney(a.cost, trip.currency)}</span>` : ''}
+          ${costTag(a, trip)}
         </button>
+        <button class="drag-handle" type="button" aria-label="拖曳排序：${esc(a.title)}">${icon('grip', 18)}</button>
       </li>`;
   }
 
@@ -667,11 +973,17 @@
         <label class="field"><span>出發日</span><input type="date" name="startDate" value="${t.startDate}"></label>
         <label class="field"><span>回程日</span><input type="date" name="endDate" value="${t.endDate}"></label>
       </div>
-      <label class="field"><span>幣別</span>
-        <select name="currency">
-          ${CURRENCIES.map((c) => `<option${c === t.currency ? ' selected' : ''}>${c}</option>`).join('')}
-        </select>
-      </label>`, {
+      <div class="field-row">
+        <label class="field"><span>幣別</span>
+          <select name="currency">
+            ${CURRENCIES.map((c) => `<option${c === t.currency ? ' selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </label>
+        <label class="field"><span>人數</span>
+          <input type="number" name="travelers" min="1" max="20" step="1" inputmode="numeric" value="${travelersOf(t)}">
+        </label>
+      </div>
+      <p class="field-hint">行程上的花費會除以人數，再算進每個人的預算。</p>`, {
       submitLabel: isNew ? '建立旅程' : '儲存',
       deleteLabel: isNew ? null : '刪除旅程',
       onSubmit: (fd) => {
@@ -681,8 +993,10 @@
           startDate: fd.get('startDate'),
           endDate: fd.get('endDate'),
           currency: fd.get('currency'),
+          travelers: Number(fd.get('travelers')),
         };
         if (!data.title) return '請填寫旅程名稱';
+        if (!Number.isInteger(data.travelers) || data.travelers < 1 || data.travelers > 20) return '人數請填 1 到 20 的整數';
         if (!data.destination) return '請填寫目的地';
         if (!data.startDate || !data.endDate) return '請選擇出發日與回程日';
         if (data.endDate < data.startDate) return '回程日不能早於出發日';
@@ -795,6 +1109,8 @@
           if (!isNew) fromList.splice(fromList.indexOf(activity), 1);
           trip.days[targetDay].activities.push(next);
         }
+        // 新增或修改後自動依時間排好
+        trip.days[targetDay].activities = sortByTime(trip.days[targetDay].activities);
         touch(trip);
         render();
         if (targetDay !== dayIdx) toast(`已${isNew ? '新增到' : '移到'} Day ${targetDay + 1}`);
@@ -884,6 +1200,7 @@
           gate: get('gate'),
           seat: get('seat').toUpperCase(),
           bookingRef: get('bookingRef').toUpperCase(),
+          fastTrack: flight?.fastTrack || false,
         };
         if (!next.flightNo) return '請填寫航班編號';
         if (!/^[A-Z]{3}$/.test(next.from.code) || !/^[A-Z]{3}$/.test(next.to.code)) return '機場代碼請填 3 個英文字母，例如 TPE';
@@ -986,6 +1303,7 @@
       startDate: start,
       endDate: day(days.length - 1),
       currency: 'NZD',
+      travelers: 2,
       days: days.map((activities, i) => ({ date: day(i), activities })),
       flights: [
         flight('紐西蘭航空', 'NZ 78', TPE, AKL, day(0), '23:10', day(1), '15:20',
@@ -997,6 +1315,14 @@
         flight('紐西蘭航空', 'NZ 77', AKL, TPE, day(6), '10:00', day(6), '16:30',
           { boardingTime: '09:15', terminal: 'I', seat: '38K', bookingRef: 'X7K2QP' }),
       ],
+      prep: (() => {
+        const item = (text, done = false) => ({ id: uid(), text, done });
+        return {
+          packing: [item('轉接頭（I 型插座）'), item('防風外套'), item('登山鞋'), item('行動電源', true)],
+          passport: [item('護照效期已確認', true), item('護照影本')],
+          visa: [item('NZeTA 電子旅行授權'), item('國際駕照')],
+        };
+      })(),
       createdAt: nowISO(),
       updatedAt: nowISO(),
     };
@@ -1018,10 +1344,38 @@
       case 'load-sample': {
         const created = sampleTrip();
         state.trips.push(JSON.parse(JSON.stringify(created)));
+        const buy = (name, price, currency, done = false) => ({ id: uid(), name, price, currency, done });
+        state.personal[created.id] = {
+          carried: { TWD: 10000, NZD: 3000 },
+          shopping: [buy('eSIM 上網卡', 650, 'TWD', true), buy('綿羊油', 20, 'NZD', true), buy('麥蘆卡蜂蜜', 45, 'NZD'), buy('羊毛襪', 30, 'NZD')],
+        };
         save();
         // 在首頁載入就留在首頁，直接看到效果
         if (route.name === 'home') render();
         else location.hash = tripHref(created);
+        break;
+      }
+      case 'check-delete': {
+        const t = currentTrip();
+        const list = prepOf(t)[el.dataset.group];
+        const item = list.find((x) => x.id === el.dataset.id);
+        if (!item) break;
+        const undo = snapshot();
+        list.splice(list.indexOf(item), 1);
+        touch(t);
+        render();
+        toast(`已刪除「${item.text}」`, undo);
+        break;
+      }
+      case 'shop-delete': {
+        const p = personalOf(currentTrip());
+        const item = p.shopping.find((x) => x.id === el.dataset.id);
+        if (!item) break;
+        const undo = snapshot();
+        p.shopping.splice(p.shopping.indexOf(item), 1);
+        save();
+        render();
+        toast(`已刪除「${item.name}」`, undo);
         break;
       }
       case 'new-flight':
@@ -1044,10 +1398,7 @@
         break;
       }
       case 'sort-time': {
-        // 有時間的依時間排序，沒時間的保持原順序放在最後
-        const list = trip.days[dayIdx].activities;
-        const timed = list.filter((a) => a.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
-        trip.days[dayIdx].activities = [...timed, ...list.filter((a) => !a.startTime)];
+        trip.days[dayIdx].activities = sortByTime(trip.days[dayIdx].activities);
         touch(trip);
         render();
         toast('已依時間排序');
@@ -1056,10 +1407,123 @@
     }
   });
 
+  // 機票上的快速通關勾選
+  app.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-flight-check]');
+    if (!box) return;
+    const t = currentTrip();
+    const flight = t?.flights.find((f) => f.id === box.dataset.flightCheck);
+    if (!flight) return;
+    flight.fastTrack = box.checked;
+    touch(t);
+  });
+
+  // 準備清單：勾選
+  app.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-check]');
+    if (!box) return;
+    const t = currentTrip();
+    const item = prepOf(t)[box.dataset.check].find((x) => x.id === box.dataset.id);
+    if (!item) return;
+    item.done = box.checked;
+    touch(t);
+    render();
+    app.querySelector(`[data-check="${box.dataset.check}"][data-id="${box.dataset.id}"]`)?.focus();
+  });
+
+  // 查詢行程：邊打邊找，只更新結果區，輸入框不會失去焦點
+  app.addEventListener('input', (e) => {
+    if (e.target.id !== 'trip-search') return;
+    const route = parseRoute();
+    const trip = route.name === 'trip' ? findTrip(route.id) : null;
+    if (!trip) return;
+    searchQuery = e.target.value;
+    showSearch(trip);
+  });
+
+  // 點查詢結果跳到那一天，同時清掉查詢
+  app.addEventListener('click', (e) => {
+    const hit = e.target.closest('.search-hit');
+    if (!hit) return;
+    searchQuery = '';
+    // 結果就在目前這一天時網址不會變、不會觸發 hashchange，要自己重畫
+    if (hit.getAttribute('href') === location.hash) {
+      e.preventDefault();
+      const y = window.scrollY;
+      render();
+      window.scrollTo(0, y);
+    }
+  });
+
+  // 預算：帶了多少
+  app.addEventListener('change', (e) => {
+    const input = e.target.closest('[data-carried]');
+    if (!input) return;
+    const n = Number(input.value);
+    personalOf(currentTrip()).carried[input.dataset.carried] = Number.isFinite(n) && n > 0 ? n : 0;
+    save();
+    render();
+  });
+
+  // 購買清單：勾選已買
+  app.addEventListener('change', (e) => {
+    const box = e.target.closest('[data-buy]');
+    if (!box) return;
+    const item = personalOf(currentTrip()).shopping.find((x) => x.id === box.dataset.buy);
+    if (!item) return;
+    item.done = box.checked;
+    save();
+    render();
+    app.querySelector(`[data-buy="${box.dataset.buy}"]`)?.focus();
+  });
+
+  // 購買清單：新增
+  app.addEventListener('submit', (e) => {
+    const form = e.target.closest('.shop-add');
+    if (!form) return;
+    e.preventDefault();
+    const name = form.elements.name.value.trim();
+    const priceRaw = form.elements.price.value.trim();
+    const price = priceRaw === '' ? undefined : Number(priceRaw);
+    const errorEl = form.querySelector('.form-error');
+    const fail = (msg) => {
+      errorEl.innerHTML = `${icon('alert', 16)}<span>${esc(msg)}</span>`;
+      errorEl.hidden = false;
+    };
+    if (!name) return fail('請填寫品名');
+    if (price !== undefined && (!Number.isFinite(price) || price < 0)) return fail('價格請輸入 0 以上的數字');
+    personalOf(currentTrip()).shopping.push({ id: uid(), name, price, currency: form.elements.currency.value, done: false });
+    save();
+    render();
+    app.querySelector('.shop-add input[name="name"]')?.focus();
+  });
+
+  // 準備清單：新增項目，新增完游標留在同一個輸入框，方便連續輸入
+  app.addEventListener('submit', (e) => {
+    const form = e.target.closest('.check-add');
+    if (!form) return;
+    e.preventDefault();
+    const text = form.elements.text.value.trim();
+    if (!text) return;
+    const t = currentTrip();
+    const group = form.dataset.group;
+    prepOf(t)[group].push({ id: uid(), text, done: false });
+    touch(t);
+    render();
+    app.querySelector(`.check-add[data-group="${group}"] input`)?.focus();
+  });
+
+  let lastRoute = parseRoute();
   window.addEventListener('hashchange', () => {
     if (sheet.open) sheet.close();
+    const route = parseRoute();
+    if (route.name !== 'trip') searchQuery = '';
+    // 同一趟旅程裡切換日期：停在原本的位置，不跳回最上面；換頁才回到頂端
+    const sameTrip = route.name === 'trip' && lastRoute.name === 'trip' && route.id === lastRoute.id;
+    lastRoute = route;
+    const y = window.scrollY;
     render();
-    window.scrollTo(0, 0);
+    window.scrollTo(0, sameTrip ? y : 0);
   });
 
   render();

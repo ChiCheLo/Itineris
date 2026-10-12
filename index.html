@@ -3,14 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#161615" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131210" media="(prefers-color-scheme: dark)">
 <title>TravelPlan 行程規劃</title>
 <meta name="description" content="安排每日行程、景點與交通的旅遊規劃工具">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 襯線標題字：Newsreader（英數）＋ 思源宋體（中文，Google Fonts 會依用到的字分段下載）；沒網路時退回系統襯線字 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Noto+Serif+TC:wght@500;600&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app" class="app"></div>
+  <nav id="tabbar" class="tabbar" aria-label="主要分頁"></nav>
 
   <dialog id="sheet" class="sheet" aria-label="編輯"></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
