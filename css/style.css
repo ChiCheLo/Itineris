@@ -27,6 +27,11 @@
   --t-lodging: #8a55b8;
   --t-other: #7d7c75;
 
+  /* 登機證 */
+  --ticket-head: #1f4f46;
+  --ticket-head-fg: #ffffff;
+  --ticket-shadow: drop-shadow(0 1px 1px rgba(0, 0, 0, .06)) drop-shadow(0 6px 16px rgba(0, 0, 0, .08));
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, .08);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, .12);
@@ -46,6 +51,8 @@
   --fs-18: 18px;
   --fs-20: 20px;
   --fs-30: 30px;
+  --fs-36: 36px;
+  --fs-display: clamp(56px, 18vw, 96px);
 
   /* 動態 */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -79,6 +86,10 @@
     --t-lodging: #b98ae0;
     --t-other: #a09f97;
 
+    --ticket-head: #24564c;
+    --ticket-head-fg: #ecebe6;
+    --ticket-shadow: none;
+
     /* 深色模式用表面亮度分層，不靠陰影 */
     --shadow-sm: none;
     --shadow-md: none;
@@ -106,6 +117,10 @@
   --t-transport: #7aa6f0;
   --t-lodging: #b98ae0;
   --t-other: #a09f97;
+
+  --ticket-head: #24564c;
+  --ticket-head-fg: #ecebe6;
+  --ticket-shadow: none;
 
   --shadow-sm: none;
   --shadow-md: none;
@@ -211,7 +226,7 @@ svg.icon { flex: none; display: block; }
 }
 .icon-btn:hover { background: var(--surface-2); }
 
-:is(.btn, .icon-btn, .activity-body, .trip-card, .day-tab, .drag-handle):focus-visible {
+:is(.btn, .icon-btn, .activity-body, .trip-card, .day-tab, .drag-handle, .home-trip, .now-card, .bp-edit, .back-link):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -266,6 +281,310 @@ svg.icon { flex: none; display: block; }
   color: var(--text-muted);
 }
 .list-footer a { color: var(--text-muted); }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-left: -6px;
+  padding-right: 8px;
+  font-size: var(--fs-16);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  border-radius: var(--r-md);
+}
+
+/* ---------- Section head（首頁、機票區共用） ---------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  margin-bottom: 12px;
+}
+.section-head h2 { font-size: var(--fs-18); font-weight: 600; }
+.section-head .count { font-size: var(--fs-14); color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+
+/* ---------- Home（打開 App 的第一個畫面） ---------- */
+.app.is-home { max-width: 1080px; }
+.home { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding-top: env(safe-area-inset-top);
+}
+.home-brand { font-size: var(--fs-14); font-weight: 700; letter-spacing: .02em; color: var(--text-muted); }
+
+.home-clock { display: grid; gap: 4px; }
+.clock {
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.clock-date { font-size: var(--fs-16); color: var(--text-muted); }
+
+.home-trip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  transition: border-color var(--dur-fast);
+}
+.home-trip:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.home-trip > .icon { color: var(--text-muted); }
+.home-trip-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.home-trip-title { font-size: var(--fs-16); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.now-list { display: grid; gap: 8px; }
+.now-card {
+  --type: var(--t-other);
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 16px 16px 16px 20px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  transition: border-color var(--dur-fast);
+}
+.now-card::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 0 var(--r-full) var(--r-full) 0;
+  background: var(--type);
+}
+.now-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.now-card.is-now { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.now-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.now-label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-12); font-weight: 700; color: var(--text-muted); }
+.now-card.is-now .now-label { color: var(--accent); }
+.now-card.is-now .now-label::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: currentColor;
+}
+.now-time { font-size: var(--fs-14); font-weight: 600; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.now-title { font-size: var(--fs-16); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.now-card.is-now .now-title { font-size: var(--fs-20); }
+
+.empty.compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.empty.compact p { font-size: var(--fs-14); }
+
+/* 桌機：左邊時間與行程，右邊機票 */
+@media (min-width: 960px) {
+  .home {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: auto auto auto 1fr;
+    grid-template-areas:
+      "top   top"
+      "clock flight"
+      "trip  flight"
+      "now   flight";
+    column-gap: 48px;
+    align-items: start;
+  }
+  .home-top { grid-area: top; }
+  .home-clock { grid-area: clock; }
+  .home-trip { grid-area: trip; }
+  .home-flight { grid-area: flight; }
+  .home-now { grid-area: now; }
+  .home-empty { grid-column: 1 / -1; }
+}
+
+/* ---------- 登機證 ----------
+ * 主體與存根是兩塊，各自用 mask 挖出四分之一圓，拼起來就是撕線兩側的半圓缺口。
+ * 外層用 drop-shadow，陰影會跟著缺口形狀走。
+ * 寬度 ≥ 560px（container query）時改成橫式：存根在右邊。
+ */
+.bp-wrap { container-type: inline-size; filter: var(--ticket-shadow); }
+.bp { --notch: 12px; --perforation: color-mix(in srgb, var(--text-muted) 45%, transparent); display: grid; }
+.bp-main, .bp-stub { background: var(--surface); overflow: hidden; }
+
+.bp-main {
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000) right / 51% 100% no-repeat;
+}
+
+.bp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 2px 4px 2px 20px;
+  background: var(--ticket-head);
+  color: var(--ticket-head-fg);
+}
+.bp-airline { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-14); font-weight: 600; }
+.bp-airline span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp-kind { flex: none; font-size: var(--fs-12); font-weight: 600; letter-spacing: .14em; opacity: .85; padding-right: 16px; }
+.bp-edit {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -12px;
+  border: none;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast);
+}
+.bp-edit:hover { background: rgba(255, 255, 255, .14); }
+
+.bp-route {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 20px 20px 16px;
+}
+.bp-port { display: grid; gap: 2px; min-width: 0; }
+.bp-port.end { justify-items: end; text-align: right; }
+.bp-code { font-size: var(--fs-36); font-weight: 700; line-height: 1.1; letter-spacing: .04em; }
+.bp-city { max-width: 100%; font-size: var(--fs-12); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp-time { margin-top: 8px; font-size: var(--fs-20); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bp-date { font-size: var(--fs-12); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.bp-path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-top: 16px;
+  color: var(--accent);
+}
+.bp-line { border-top: 2px dotted var(--perforation); }
+.bp-plane .icon { transform: rotate(45deg); }
+.bp-flightno { grid-column: 1 / -1; text-align: center; font-size: var(--fs-12); font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+
+.bp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+  padding: 0 20px 20px;
+}
+.bp-field { min-width: 0; }
+.bp-field.wide { grid-column: 1 / -1; }
+.bp-field dt { font-size: var(--fs-12); color: var(--text-muted); }
+.bp-field dd { margin: 0; font-size: var(--fs-16); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bp-field.mono dd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; }
+
+.bp-stub {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+  border-top: 2px dashed var(--perforation);
+  -webkit-mask:
+    radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000) right / 51% 100% no-repeat;
+}
+.bp-stub-head { display: none; }
+.bp-stub-fields { flex: none; display: flex; gap: 16px; margin: 0; }
+/* 直式時座位已經在主體，存根只放訂位代號 */
+.bp-stub-fields .bp-field:nth-child(2) { display: none; }
+.bp-barcode { flex: 1; min-width: 0; height: 40px; color: var(--text); opacity: .85; }
+.bp-barcode svg { display: block; width: 100%; height: 100%; }
+
+@container (min-width: 560px) {
+  .bp { grid-template-columns: minmax(0, 1fr) 176px; }
+  .bp-main {
+    border-radius: var(--r-xl) 0 0 var(--r-xl);
+    -webkit-mask:
+      radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+    mask:
+      radial-gradient(circle var(--notch) at 100% 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at 100% 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+  }
+  .bp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .bp-field.wide { grid-column: span 2; }
+  .bp-stub {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    border-radius: 0 var(--r-xl) var(--r-xl) 0;
+    border-top: none;
+    border-left: 2px dashed var(--perforation);
+    -webkit-mask:
+      radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+    mask:
+      radial-gradient(circle var(--notch) at 0 0, #0000 98%, #000) top / 100% 51% no-repeat,
+      radial-gradient(circle var(--notch) at 0 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+  }
+  .bp-stub-head {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 20px;
+    background: var(--ticket-head);
+    color: var(--ticket-head-fg);
+    font-size: var(--fs-14);
+    font-weight: 600;
+  }
+  .bp-stub-fields { flex-direction: column; gap: 12px; padding: 20px; }
+  .bp-stub-fields .bp-field:nth-child(2) { display: block; }
+  .bp-barcode { flex: none; height: 48px; margin: auto 20px 20px; }
+}
+
+/* ---------- 旅程詳情的機票區 ---------- */
+.flights { margin-bottom: 8px; }
+.flight-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 4px var(--gutter) 16px;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 var(--gutter);
+  scrollbar-width: none;
+}
+.flight-scroll::-webkit-scrollbar { display: none; }
+.flight-scroll > .bp-wrap { flex: 0 0 88%; scroll-snap-align: start; }
+.flight-scroll > .bp-wrap:only-child { flex-basis: 100%; }
 
 /* ---------- Empty state ---------- */
 .empty {
@@ -355,10 +674,10 @@ svg.icon { flex: none; display: block; }
   border-radius: 0 var(--r-full) var(--r-full) 0;
   background: var(--type);
 }
-.activity[data-type="sight"] { --type: var(--t-sight); }
-.activity[data-type="food"] { --type: var(--t-food); }
-.activity[data-type="transport"] { --type: var(--t-transport); }
-.activity[data-type="lodging"] { --type: var(--t-lodging); }
+:is(.activity, .now-card)[data-type="sight"] { --type: var(--t-sight); }
+:is(.activity, .now-card)[data-type="food"] { --type: var(--t-food); }
+:is(.activity, .now-card)[data-type="transport"] { --type: var(--t-transport); }
+:is(.activity, .now-card)[data-type="lodging"] { --type: var(--t-lodging); }
 .activity.dragging {
   z-index: 2;
   box-shadow: var(--shadow-lg);
@@ -483,6 +802,8 @@ svg.icon { flex: none; display: block; }
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field input.upper { text-transform: uppercase; }
+.field-hint { margin-top: -8px; font-size: var(--fs-12); color: var(--text-muted); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; border: none; margin: 0; padding: 0; }
 .chips legend { padding: 0; margin-bottom: 8px; }

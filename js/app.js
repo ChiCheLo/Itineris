@@ -11,7 +11,8 @@
     lodging: '住宿',
     other: '其他',
   };
-  const CURRENCIES = ['TWD', 'JPY', 'KRW', 'USD', 'EUR', 'THB', 'HKD', 'CNY', 'SGD', 'GBP'];
+  const CURRENCIES = ['TWD', 'NZD', 'JPY', 'KRW', 'USD', 'EUR', 'THB', 'HKD', 'CNY', 'SGD', 'GBP'];
+  const CABINS = ['經濟艙', '豪華經濟艙', '商務艙', '頭等艙'];
 
   const app = document.getElementById('app');
   const sheet = document.getElementById('sheet');
@@ -29,6 +30,8 @@
     calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
     plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
     alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    chevron: '<path d="m9 18 6-6-6-6"/>',
   };
 
   const icon = (name, size = 20) =>
@@ -41,7 +44,10 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { trips: [] };
       const data = JSON.parse(raw);
-      return data && Array.isArray(data.trips) ? data : { trips: [] };
+      if (!data || !Array.isArray(data.trips)) return { trips: [] };
+      // 舊資料沒有機票欄位
+      data.trips.forEach((t) => { if (!Array.isArray(t.flights)) t.flights = []; });
+      return data;
     } catch {
       return { trips: [] };
     }
@@ -76,6 +82,20 @@
   function todayISO() {
     const d = new Date();
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function nowTime() {
+    const d = new Date();
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  // 'YYYY-MM-DDTHH:mm'，以手機當地時間比較，字串可直接比大小
+  const nowKey = () => `${todayISO()}T${nowTime()}`;
+  const flightKey = (f) => `${f.departDate}T${f.departTime}`;
+
+  function fmtLongDate(str) {
+    const d = parseDate(str);
+    return `${d.getUTCMonth() + 1} 月 ${d.getUTCDate()} 日 星期${WEEKDAYS[d.getUTCDay()]}`;
   }
 
   function addDays(str, n) {
@@ -144,7 +164,8 @@
   }
 
   // ---------- Routing ----------
-  // #/                 旅程列表
+  // #/                 首頁：現在時間、機票、當下行程
+  // #/trips            旅程列表
   // #/trip/:id/:day    旅程詳情（day 從 0 起算）
 
   function parseRoute() {
@@ -152,7 +173,8 @@
     if (parts[0] === 'trip' && parts[1]) {
       return { name: 'trip', id: decodeURIComponent(parts[1]), day: Number(parts[2]) || 0 };
     }
-    return { name: 'list' };
+    if (parts[0] === 'trips') return { name: 'list' };
+    return { name: 'home' };
   }
 
   const tripHref = (trip, day = 0) => `#/trip/${encodeURIComponent(trip.id)}/${day}`;
@@ -160,16 +182,244 @@
 
   function render() {
     const route = parseRoute();
+    app.classList.toggle('is-home', route.name === 'home');
     if (route.name === 'trip') {
       const trip = findTrip(route.id);
       if (!trip) {
-        location.hash = '#/';
+        location.hash = '#/trips';
         return;
       }
       renderTrip(trip, clampDay(trip, route.day));
-    } else {
+    } else if (route.name === 'list') {
       renderList();
+    } else {
+      renderHome();
     }
+  }
+
+  // ---------- 首頁 ----------
+  // 打開 App 第一眼：現在時間 → 機票 → 當下行程
+
+  // 旅途中 > 最近要出發 > 最近結束
+  function homeTrip() {
+    const today = todayISO();
+    const trips = state.trips;
+    if (!trips.length) return null;
+    const ongoing = trips.find((t) => t.startDate <= today && today <= t.endDate);
+    if (ongoing) return ongoing;
+    const upcoming = trips.filter((t) => t.startDate > today).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    if (upcoming.length) return upcoming[0];
+    return [...trips].sort((a, b) => b.endDate.localeCompare(a.endDate))[0];
+  }
+
+  // 只看有開始時間的活動；沒有結束時間的，算到同一天下一個活動開始為止
+  function activityNowNext(trip, key) {
+    const items = [];
+    trip.days.forEach((d, dayIdx) => {
+      const timed = d.activities.filter((a) => a.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
+      timed.forEach((a, j) => {
+        const start = `${d.date}T${a.startTime}`;
+        const end = `${d.date}T${a.endTime || timed[j + 1]?.startTime || '24:00'}`;
+        items.push({ a, dayIdx, start, end });
+      });
+    });
+    const current = items.filter((x) => x.start <= key && key < x.end).pop();
+    const next = items.find((x) => x.start > key && x !== current);
+    return { current, next };
+  }
+
+  function renderHome() {
+    document.title = 'TravelPlan 行程規劃';
+    const today = todayISO();
+    const trip = homeTrip();
+
+    const clock = `
+      <section class="home-clock" aria-label="現在時間">
+        <time class="clock" datetime="${nowKey()}">${nowTime()}</time>
+        <p class="clock-date">${fmtLongDate(today)}</p>
+      </section>`;
+
+    if (!trip) {
+      app.innerHTML = `
+        <div class="home">
+          ${homeTop()}
+          ${clock}
+          <div class="empty home-empty">
+            <div class="empty-icon">${icon('plane', 24)}</div>
+            <strong>還沒有旅程</strong>
+            <p>建立一趟旅程，加入機票和每日行程後，打開 App 就能看到下一班飛機和現在該做什麼。</p>
+            <div class="empty-actions">
+              <button class="btn primary" type="button" data-action="new-trip">${icon('plus', 18)}建立第一趟旅程</button>
+              <button class="btn secondary" type="button" data-action="load-sample">看範例行程</button>
+            </div>
+          </div>
+        </div>`;
+      startClock();
+      return;
+    }
+
+    const key = nowKey();
+    const status = tripStatus(trip);
+    const todayIdx = trip.days.findIndex((d) => d.date === today);
+    const progress = todayIdx >= 0 ? `Day ${todayIdx + 1} / ${trip.days.length}` : status.label;
+    const flights = trip.flights || [];
+    const nextFlight = flights.find((f) => flightKey(f) >= key);
+    const { current, next } = activityNowNext(trip, key);
+
+    const flightBlock = nextFlight
+      ? boardingPass(nextFlight)
+      : `<div class="empty compact">
+           <p>${flights.length ? '這趟旅程的航班都已出發。' : '還沒有加入機票。'}</p>
+           <a class="btn secondary small" href="${tripHref(trip)}">${flights.length ? '查看機票' : `${icon('plus', 16)}新增機票`}</a>
+         </div>`;
+
+    const nowBlock = current || next
+      ? `${current ? nowCard(trip, current, '現在', today) : ''}${next ? nowCard(trip, next, '接下來', today) : ''}`
+      : `<div class="empty compact">
+           <p>${todayIdx >= 0 || today < trip.startDate ? '接下來沒有排定時間的行程。' : '這趟旅程已經結束。'}</p>
+           <a class="btn secondary small" href="${tripHref(trip, Math.max(todayIdx, 0))}">查看行程</a>
+         </div>`;
+
+    app.innerHTML = `
+      <div class="home">
+        ${homeTop()}
+        ${clock}
+        <a class="home-trip" href="${tripHref(trip, Math.max(todayIdx, 0))}">
+          <span class="home-trip-text">
+            <span class="trip-dest">${icon('pin', 14)}<span>${esc(trip.destination)}</span></span>
+            <span class="home-trip-title">${esc(trip.title)}</span>
+          </span>
+          <span class="badge ${status.cls}">${progress}</span>
+          ${icon('chevron', 20)}
+        </a>
+
+        <section class="home-flight">
+          <div class="section-head">
+            <h2>${nextFlight ? '下一班飛機' : '機票'}</h2>
+            ${flights.length ? `<a class="btn ghost small" href="${tripHref(trip)}">全部 ${flights.length} 張</a>` : ''}
+          </div>
+          ${flightBlock}
+        </section>
+
+        <section class="home-now">
+          <div class="section-head"><h2>當下行程</h2></div>
+          <div class="now-list">${nowBlock}</div>
+        </section>
+      </div>`;
+    startClock();
+  }
+
+  function homeTop() {
+    return `
+      <header class="home-top">
+        <span class="home-brand">TravelPlan</span>
+        <a class="btn ghost small" href="#/trips">所有旅程</a>
+      </header>`;
+  }
+
+  function nowCard(trip, item, label, today) {
+    const { a, dayIdx } = item;
+    const type = TYPES[a.type] ? a.type : 'other';
+    const day = trip.days[dayIdx];
+    const when = day.date === today ? fmtTime(a) : `Day ${dayIdx + 1} · ${fmtShort(day.date)} · ${fmtTime(a)}`;
+    const isNow = label === '現在';
+    return `
+      <a class="now-card${isNow ? ' is-now' : ''}" href="${tripHref(trip, dayIdx)}" data-type="${type}">
+        <span class="now-top">
+          <span class="now-label">${label}</span>
+          <span class="type-tag">${TYPES[type]}</span>
+        </span>
+        <span class="now-time">${esc(when)}</span>
+        <span class="now-title">${esc(a.title)}</span>
+        ${a.location?.name ? `<span class="activity-meta">${icon('pin', 14)}<span>${esc(a.location.name)}</span></span>` : ''}
+        ${isNow && a.note ? `<span class="activity-note">${esc(a.note)}</span>` : ''}
+      </a>`;
+  }
+
+  // 每秒檢查，分鐘數變了才重畫，讓時間與「現在」行程跟著更新
+  let clockTimer;
+  function startClock() {
+    clearInterval(clockTimer);
+    let last = nowKey();
+    clockTimer = setInterval(() => {
+      if (parseRoute().name !== 'home') {
+        clearInterval(clockTimer);
+        return;
+      }
+      const key = nowKey();
+      if (key !== last && !sheet.open) {
+        last = key;
+        render();
+      }
+    }, 1000);
+  }
+
+  // ---------- 機票（登機證樣式） ----------
+
+  // 裝飾用條碼：由訂位代號決定線條，同一張機票每次長得一樣
+  function barcode(seed) {
+    let h = 2166136261;
+    for (const c of String(seed || 'TRAVELPLAN')) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    let x = 0;
+    let bars = '';
+    for (let i = 0; i < 48; i++) {
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      const w = 1 + (Math.abs(h) % 3);
+      if (i % 2 === 0) bars += `<rect x="${x}" width="${w}" height="40"/>`;
+      x += w;
+    }
+    return `<svg viewBox="0 0 ${x} 40" preserveAspectRatio="none" fill="currentColor" aria-hidden="true">${bars}</svg>`;
+  }
+
+  function boardingPass(f, { editable = false } = {}) {
+    const field = (label, value, cls = '') =>
+      `<div class="bp-field${cls}"><dt>${label}</dt><dd>${value ? esc(value) : '—'}</dd></div>`;
+    const port = (p, time, date, cls = '') => `
+      <div class="bp-port${cls}">
+        <span class="bp-code">${esc(p.code)}</span>
+        <span class="bp-city">${esc(p.city || '')}</span>
+        <span class="bp-time">${esc(time || '--:--')}</span>
+        <span class="bp-date">${date ? fmtShort(date) : ''}</span>
+      </div>`;
+    return `
+      <div class="bp-wrap">
+        <article class="bp" aria-label="${esc(`機票 ${f.flightNo}，${f.from.code} 飛往 ${f.to.code}，${fmtShort(f.departDate)} ${f.departTime} 出發`)}">
+          <div class="bp-main">
+            <header class="bp-head">
+              <span class="bp-airline">${icon('plane', 16)}<span>${esc(f.airline || '航班')}</span></span>
+              <span class="bp-kind">BOARDING PASS</span>
+              ${editable ? `<button class="bp-edit" type="button" data-action="edit-flight" data-id="${esc(f.id)}" aria-label="編輯機票 ${esc(f.flightNo)}">${icon('pencil', 16)}</button>` : ''}
+            </header>
+            <div class="bp-route">
+              ${port(f.from, f.departTime, f.departDate)}
+              <div class="bp-path" aria-hidden="true">
+                <span class="bp-line"></span>
+                <span class="bp-plane">${icon('plane', 20)}</span>
+                <span class="bp-line"></span>
+                <span class="bp-flightno">${esc(f.flightNo)}</span>
+              </div>
+              ${port(f.to, f.arriveTime, f.arriveDate, ' end')}
+            </div>
+            <dl class="bp-grid">
+              ${field('乘客', f.passenger, ' wide')}
+              ${field('航班', f.flightNo)}
+              ${field('艙等', f.cabin)}
+              ${field('登機時間', f.boardingTime)}
+              ${field('航廈', f.terminal)}
+              ${field('登機門', f.gate)}
+              ${field('座位', f.seat)}
+            </dl>
+          </div>
+          <div class="bp-stub">
+            <div class="bp-stub-head">${esc(f.flightNo)}</div>
+            <dl class="bp-stub-fields">
+              ${field('訂位代號', f.bookingRef, ' mono')}
+              ${field('座位', f.seat)}
+            </dl>
+            <div class="bp-barcode">${barcode(f.bookingRef || f.flightNo)}</div>
+          </div>
+        </article>
+      </div>`;
   }
 
   // ---------- 旅程列表 ----------
@@ -181,6 +431,7 @@
     app.innerHTML = `
       <header class="page-head">
         <div>
+          <a class="back-link" href="#/">${icon('back', 18)}現在</a>
           <h1>我的旅程</h1>
           ${trips.length ? `<p>${trips.length} 趟旅程</p>` : ''}
         </div>
@@ -226,13 +477,23 @@
 
     app.innerHTML = `
       <header class="topbar">
-        <a class="icon-btn back" href="#/" aria-label="返回旅程列表">${icon('back', 24)}</a>
+        <a class="icon-btn back" href="#/trips" aria-label="返回旅程列表">${icon('back', 24)}</a>
         <div class="topbar-title">
           <h1>${esc(trip.title)}</h1>
           <p>${esc(trip.destination)} · ${fmtShort(trip.startDate)} – ${fmtShort(trip.endDate)}</p>
         </div>
         <button class="btn ghost small" type="button" data-action="edit-trip">編輯</button>
       </header>
+
+      <section class="flights" aria-label="機票">
+        <div class="section-head">
+          <h2>機票${trip.flights.length ? `<span class="count">${trip.flights.length} 張</span>` : ''}</h2>
+          <button class="btn ghost small" type="button" data-action="new-flight">${icon('plus', 16)}新增機票</button>
+        </div>
+        ${trip.flights.length
+          ? `<div class="flight-scroll">${trip.flights.map((f) => boardingPass(f, { editable: true })).join('')}</div>`
+          : `<div class="empty compact"><p>加入機票後，打開 App 首頁就會顯示下一班飛機。</p></div>`}
+      </section>
 
       <nav class="day-tabs" aria-label="選擇日期">
         ${trip.days.map((d, i) => `
@@ -433,6 +694,7 @@
             id: uid(),
             ...data,
             days: dates.map((date) => ({ date, activities: [] })),
+            flights: [],
             createdAt: nowISO(),
             updatedAt: nowISO(),
           };
@@ -457,7 +719,7 @@
           state.trips = state.trips.filter((x) => x.id !== trip.id);
           save();
           sheet.close();
-          location.hash = '#/';
+          location.hash = '#/trips';
           toast(`已刪除「${trip.title}」`, undo);
         },
       },
@@ -551,10 +813,107 @@
     });
   }
 
+  // ---------- 機票表單 ----------
+
+  function openFlightForm(trip, flight) {
+    const isNew = !flight;
+    const f = flight || {
+      from: {}, to: {},
+      departDate: trip.startDate,
+      arriveDate: trip.startDate,
+      cabin: CABINS[0],
+    };
+    const input = (name, label, value, attrs = '') =>
+      `<label class="field"><span>${label}</span><input name="${name}" value="${esc(value || '')}" autocomplete="off" ${attrs}></label>`;
+
+    openSheet(isNew ? '新增機票' : '編輯機票', `
+      <div class="field-row">
+        ${input('airline', '航空公司', f.airline, 'maxlength="40" placeholder="例：紐西蘭航空"')}
+        ${input('flightNo', '航班編號', f.flightNo, 'maxlength="10" placeholder="例：NZ 78"')}
+      </div>
+      ${input('passenger', '乘客姓名', f.passenger, 'maxlength="60" placeholder="與護照相同，例：WANG/XIAOMING"')}
+      <div class="field-row">
+        ${input('fromCode', '出發機場代碼', f.from.code, 'maxlength="3" placeholder="TPE" class="upper"')}
+        ${input('fromCity', '出發城市', f.from.city, 'maxlength="30" placeholder="台北桃園"')}
+      </div>
+      <div class="field-row">
+        ${input('toCode', '抵達機場代碼', f.to.code, 'maxlength="3" placeholder="AKL" class="upper"')}
+        ${input('toCity', '抵達城市', f.to.city, 'maxlength="30" placeholder="奧克蘭"')}
+      </div>
+      <div class="field-row">
+        <label class="field"><span>出發日期</span><input type="date" name="departDate" value="${esc(f.departDate || '')}"></label>
+        <label class="field"><span>出發時間</span><input type="time" name="departTime" value="${esc(f.departTime || '')}"></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>抵達日期</span><input type="date" name="arriveDate" value="${esc(f.arriveDate || '')}"></label>
+        <label class="field"><span>抵達時間</span><input type="time" name="arriveTime" value="${esc(f.arriveTime || '')}"></label>
+      </div>
+      <p class="field-hint">時間請填機票上的當地時間。</p>
+      <div class="field-row">
+        <label class="field"><span>登機時間</span><input type="time" name="boardingTime" value="${esc(f.boardingTime || '')}"></label>
+        <label class="field"><span>艙等</span>
+          <select name="cabin">${CABINS.map((c) => `<option${c === f.cabin ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        </label>
+      </div>
+      <div class="field-row">
+        ${input('terminal', '航廈', f.terminal, 'maxlength="10" placeholder="例：T1"')}
+        ${input('gate', '登機門', f.gate, 'maxlength="10" placeholder="例：A5"')}
+      </div>
+      <div class="field-row">
+        ${input('seat', '座位', f.seat, 'maxlength="6" placeholder="例：42A"')}
+        ${input('bookingRef', '訂位代號', f.bookingRef, 'maxlength="10" placeholder="例：X7K2QP" class="upper"')}
+      </div>`, {
+      submitLabel: isNew ? '新增' : '儲存',
+      deleteLabel: isNew ? null : '刪除機票',
+      onSubmit: (fd) => {
+        const get = (k) => fd.get(k).trim();
+        const next = {
+          id: isNew ? uid() : flight.id,
+          airline: get('airline'),
+          flightNo: get('flightNo').toUpperCase(),
+          passenger: get('passenger'),
+          from: { code: get('fromCode').toUpperCase(), city: get('fromCity') },
+          to: { code: get('toCode').toUpperCase(), city: get('toCity') },
+          departDate: get('departDate'),
+          departTime: get('departTime'),
+          arriveDate: get('arriveDate'),
+          arriveTime: get('arriveTime'),
+          boardingTime: get('boardingTime'),
+          cabin: get('cabin'),
+          terminal: get('terminal'),
+          gate: get('gate'),
+          seat: get('seat').toUpperCase(),
+          bookingRef: get('bookingRef').toUpperCase(),
+        };
+        if (!next.flightNo) return '請填寫航班編號';
+        if (!/^[A-Z]{3}$/.test(next.from.code) || !/^[A-Z]{3}$/.test(next.to.code)) return '機場代碼請填 3 個英文字母，例如 TPE';
+        if (!next.departDate || !next.departTime) return '請填寫出發日期與時間';
+
+        if (isNew) trip.flights.push(next);
+        else trip.flights[trip.flights.indexOf(flight)] = next;
+        // 機票一律依出發時間排列
+        trip.flights.sort((a, b) => flightKey(a).localeCompare(flightKey(b)));
+        touch(trip);
+        render();
+      },
+      actions: {
+        delete: () => {
+          const undo = snapshot();
+          trip.flights.splice(trip.flights.indexOf(flight), 1);
+          touch(trip);
+          sheet.close();
+          render();
+          toast(`已刪除機票 ${flight.flightNo}`, undo);
+        },
+      },
+    });
+  }
+
   // ---------- 範例行程 ----------
 
   function sampleTrip() {
     const start = addDays(todayISO(), 14);
+    const day = (n) => addDays(start, n);
     const act = (title, type, startTime, endTime, location, cost, note) => ({
       id: uid(), title, type,
       startTime: startTime || undefined,
@@ -562,40 +921,82 @@
       location: location ? { name: location } : undefined,
       cost, note,
     });
+    const flight = (airline, flightNo, from, to, departDate, departTime, arriveDate, arriveTime, extra) => ({
+      id: uid(), airline, flightNo,
+      passenger: 'WANG/XIAOMING',
+      from, to, departDate, departTime, arriveDate, arriveTime,
+      cabin: '經濟艙',
+      ...extra,
+    });
+    const TPE = { code: 'TPE', city: '台北桃園' };
+    const AKL = { code: 'AKL', city: '奧克蘭' };
     const days = [
       [
-        act('桃園機場 → 成田機場', 'transport', '08:50', '13:05', '桃園國際機場 第二航廈', undefined, '提早 2 小時報到，行李限重 23kg'),
-        act('Skyliner 前往上野', 'transport', '14:20', '15:01', '成田機場第 1 航廈站', 2580),
-        act('飯店入住', 'lodging', '16:00', undefined, '上野站步行 5 分鐘', 41800, '共 3 晚，已付訂金'),
-        act('阿美橫丁晚餐', 'food', '18:30', '20:00', '阿美橫丁商店街', 2350),
+        act('前往桃園機場', 'transport', '19:30', '20:30', '桃園國際機場 第一航廈', undefined, '國際線提早 2.5 小時報到'),
+        act('機場晚餐', 'food', '21:00', '21:45', '第一航廈 管制區'),
       ],
       [
-        act('築地場外市場早餐', 'food', '08:00', '09:30', '築地場外市場', 3200, '海鮮丼店 7:00 開門，早點去不用排隊'),
-        act('淺草寺・雷門', 'sight', '10:30', '12:30', '東京都台東區淺草 2-3-1'),
-        act('東京晴空塔 天望甲板', 'sight', '14:00', '16:00', '東京都墨田區押上 1-1-2', 3100, '已預約 14:00 入場'),
-        act('燒肉晚餐', 'food', '19:00', '20:30', '錦糸町', 6480),
+        act('奧克蘭轉國內線', 'transport', '15:20', '17:00', '奧克蘭機場', undefined, '入境後領行李、過海關，再到國內線航廈'),
+        act('皇后鎮機場取車', 'transport', '19:00', '19:40', '皇后鎮機場', undefined, '租車訂單在信箱'),
+        act('Fergburger 晚餐', 'food', '20:15', '21:15', 'Fergburger, Shotover St', 48),
+        act('入住皇后鎮', 'lodging', '21:30', undefined, '皇后鎮市區', 260, '共 2 晚'),
       ],
       [
-        act('明治神宮', 'sight', '09:30', '11:00', '東京都澀谷區代代木神園町 1-1'),
-        act('表參道午餐', 'food', '12:00', '13:00', '表參道', 1850),
-        act('原宿竹下通', 'sight', '13:30', '15:30', '竹下通'),
-        act('澀谷觀景台看夕陽', 'sight', '17:00', '18:30', '澀谷站', 2500, '日落時段需提前一週預約'),
+        act('早餐', 'food', '06:30', '07:00', '飯店'),
+        act('米佛峽灣一日遊', 'sight', '07:15', '19:30', 'Milford Sound', 520, '巴士 + 遊船，含午餐'),
+        act('晚餐', 'food', '20:00', '21:00', '皇后鎮市區', 90),
       ],
       [
-        act('退房', 'lodging', '10:00'),
-        act('銀座逛街', 'sight', '11:00', '15:00', '銀座中央通'),
-        act('Skyliner 前往成田機場', 'transport', '15:40', '16:24', '京成上野站', 2580),
-        act('成田機場 → 桃園機場', 'transport', '18:35', '21:55', '成田機場 第 2 航廈'),
+        act('早餐', 'food', '08:00', '08:45', '飯店'),
+        act('皇后鎮 → 瓦納卡', 'transport', '09:30', '10:45', 'Crown Range Road'),
+        act('瓦納卡孤獨的樹', 'sight', '11:00', '12:00', 'That Wanaka Tree'),
+        act('湖畔午餐', 'food', '12:30', '13:30', 'Wanaka', 60),
+        act('瓦納卡 → 庫克山', 'transport', '14:00', '16:30', 'SH8'),
+        act('入住庫克山', 'lodging', '17:00', undefined, 'Aoraki/Mount Cook Village', 340),
+        act('晚餐', 'food', '19:00', '20:00', '飯店餐廳', 110),
+      ],
+      [
+        act('早餐', 'food', '07:00', '07:45', '飯店'),
+        act('胡克谷步道', 'sight', '08:00', '11:30', 'Hooker Valley Track', undefined, '來回約 3 小時，帶防風外套'),
+        act('午餐', 'food', '12:00', '13:00', '庫克山村', 55),
+        act('庫克山 → 蒂卡波', 'transport', '13:30', '15:00', 'SH80 / SH8'),
+        act('好牧羊人教堂', 'sight', '15:30', '16:30', 'Church of the Good Shepherd'),
+        act('入住蒂卡波', 'lodging', '17:00', undefined, 'Lake Tekapo', 290),
+        act('晚餐', 'food', '18:30', '19:30', 'Lake Tekapo', 85),
+        act('星空導覽', 'sight', '21:30', '23:00', 'Dark Sky Project', 180, '已預約，天候不佳會改期'),
+      ],
+      [
+        act('早餐', 'food', '08:00', '08:45', '飯店'),
+        act('蒂卡波 → 基督城', 'transport', '09:30', '13:00', 'SH79 / SH1'),
+        act('午餐', 'food', '13:30', '14:30', 'Riverside Market', 45),
+        act('基督城植物園', 'sight', '15:00', '17:00', 'Christchurch Botanic Gardens'),
+        act('入住基督城', 'lodging', '17:30', undefined, '基督城市區', 220),
+        act('晚餐', 'food', '19:00', '20:00', '基督城市區', 95),
+      ],
+      [
+        act('還車', 'transport', '05:30', '06:00', '基督城機場', undefined, '還車前加滿油'),
+        act('機場早餐', 'food', '06:15', '06:45', '基督城機場', 30),
+        act('奧克蘭轉國際線', 'transport', '08:20', '10:00', '奧克蘭機場'),
       ],
     ];
     return {
       id: uid(),
-      title: '東京四日遊',
-      destination: '日本東京',
+      title: '紐西蘭南島自駕',
+      destination: '紐西蘭南島',
       startDate: start,
-      endDate: addDays(start, days.length - 1),
-      currency: 'JPY',
-      days: days.map((activities, i) => ({ date: addDays(start, i), activities })),
+      endDate: day(days.length - 1),
+      currency: 'NZD',
+      days: days.map((activities, i) => ({ date: day(i), activities })),
+      flights: [
+        flight('紐西蘭航空', 'NZ 78', TPE, AKL, day(0), '23:10', day(1), '15:20',
+          { boardingTime: '22:30', terminal: 'T1', gate: 'B5', seat: '42A', bookingRef: 'X7K2QP' }),
+        flight('紐西蘭航空', 'NZ 615', AKL, { code: 'ZQN', city: '皇后鎮' }, day(1), '17:00', day(1), '18:50',
+          { boardingTime: '16:30', terminal: 'D', seat: '12C', bookingRef: 'X7K2QP' }),
+        flight('紐西蘭航空', 'NZ 506', { code: 'CHC', city: '基督城' }, AKL, day(6), '07:00', day(6), '08:20',
+          { boardingTime: '06:30', terminal: 'D', seat: '8F', bookingRef: 'X7K2QP' }),
+        flight('紐西蘭航空', 'NZ 77', AKL, TPE, day(6), '10:00', day(6), '16:30',
+          { boardingTime: '09:15', terminal: 'I', seat: '38K', bookingRef: 'X7K2QP' }),
+      ],
       createdAt: nowISO(),
       updatedAt: nowISO(),
     };
@@ -618,7 +1019,17 @@
         const created = sampleTrip();
         state.trips.push(JSON.parse(JSON.stringify(created)));
         save();
-        location.hash = tripHref(created);
+        // 在首頁載入就留在首頁，直接看到效果
+        if (route.name === 'home') render();
+        else location.hash = tripHref(created);
+        break;
+      }
+      case 'new-flight':
+        openFlightForm(trip, null);
+        break;
+      case 'edit-flight': {
+        const flight = trip.flights.find((f) => f.id === el.dataset.id);
+        if (flight) openFlightForm(trip, flight);
         break;
       }
       case 'edit-trip':

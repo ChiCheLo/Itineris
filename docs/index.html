@@ -181,7 +181,7 @@
       <div class="meta">
         <span>Repo：<a href="https://github.com/ChiCheLo/TravelPlan_WebAPP">ChiCheLo/TravelPlan_WebAPP</a></span>
         <span>建立日期：2026-10-12</span>
-        <span>目前階段：<span class="badge doing">MVP 開發</span></span>
+        <span>目前階段：<span class="badge doing">依新規格開發中</span></span>
         <span><a href="../index.html">開啟 App</a></span>
       </div>
     </header>
@@ -190,17 +190,17 @@
     <section id="overview">
       <h2>1. 專案概述</h2>
       <h3>目標</h3>
-      <p>做一個在手機和電腦上都好用的旅遊行程規劃工具。使用者可以建立旅程、逐日安排景點與交通、在地圖上看路線，並記錄預算。</p>
+      <p>做一個以手機為主的旅遊行程規劃工具，取代目前用 iPhone 備忘錄排行程的方式。出發前用來準備機票、證件、入境資料、行李與行程；旅途中打開就能看到現在時間、機票時間和當下該做什麼。</p>
       <h3>目標使用者</h3>
       <ul>
-        <li>自助旅行者：需要把散落在筆記、Google Maps、試算表的資訊整合在一起。</li>
-        <li>結伴旅行的小團體：需要一份大家都看得到的行程（後續版本）。</li>
+        <li>使用者本人與旅伴一起使用。</li>
+        <li>旅行型態：國外自由行。目前預設的旅程是<strong>紐西蘭南島</strong>。</li>
       </ul>
-      <h3>要解決的問題</h3>
+      <h3>要解決的問題（使用者原話整理）</h3>
       <ul>
-        <li>行程、地點、交通、花費分散在不同工具。</li>
-        <li>旅途中用手機查看行程不方便。</li>
-        <li>難以一眼看出每天的時間安排是否合理。</li>
+        <li>用 iPhone 備忘錄排行程，沒有視覺化的介面。</li>
+        <li>新增行程時沒辦法自動排序，全部都要手動調整，很麻煩。</li>
+        <li>要找某個行程很花時間。</li>
       </ul>
     </section>
 
@@ -213,9 +213,9 @@
           <div class="t-title">階段 0：建立專案 <span class="badge done">完成</span></div>
           <div class="t-desc">初始化 git、連接 GitHub repo、建立本規劃文件。</div>
         </li>
-        <li class="is-done">
-          <div class="t-title">階段 1：需求定義 <span class="badge done">完成</span></div>
-          <div class="t-desc">MVP 以「可互動的純前端」為標準，範圍為 P0 功能（F-01～F-05）。</div>
+        <li class="is-doing">
+          <div class="t-title">階段 1：需求定義 <span class="badge doing">重新整理中</span></div>
+          <div class="t-desc">原本的功能規格是 AI 先寫的草稿，2026-10-12 改為依使用者實際需求重新整理（見第 3 節）。MVP 仍以「可互動的純前端」為標準。</div>
         </li>
         <li class="is-done">
           <div class="t-title">階段 2：規格設計 <span class="badge done">完成</span></div>
@@ -227,7 +227,7 @@
         </li>
         <li class="is-doing">
           <div class="t-title">階段 4：MVP 開發 <span class="badge doing">進行中</span></div>
-          <div class="t-desc">P0 功能第一版已完成，待實機測試。</div>
+          <div class="t-desc">依原草案做的第一版已完成（旅程、每日行程、活動、拖曳排序、本機保存）。依新規格已完成首頁（F-10）與機票（F-01）第一版，其餘功能依序補做。</div>
         </li>
         <li>
           <div class="t-title">階段 5：測試與修正 <span class="badge todo">未開始</span></div>
@@ -235,7 +235,7 @@
         </li>
         <li>
           <div class="t-title">階段 6：部署上線 <span class="badge todo">未開始</span></div>
-          <div class="t-desc">部署到 GitHub Pages（或其他平台），之後進入迭代。</div>
+          <div class="t-desc">部署到 GitHub Pages（D-010），之後進入迭代。</div>
         </li>
       </ol>
     </section>
@@ -243,22 +243,57 @@
     <!-- 3 -->
     <section id="features">
       <h2>3. 功能規格</h2>
-      <div class="note">優先級：<strong>P0</strong> = MVP 必備，<strong>P1</strong> = MVP 後第一批，<strong>P2</strong> = 之後再說。目前為草案，待確認。</div>
+      <div class="note">2026-10-12 起，功能規格改以使用者提出的需求為準（D-008），原則是「依使用者說的做，不多做」（D-011）。「現況」欄是對照目前程式（依原草案做的第一版）的完成程度。優先順序尚未定案，見第 11 節。</div>
+
+      <h3>出發前</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>編號</th><th>功能</th><th>說明</th><th>優先級</th></tr></thead>
+          <thead><tr><th>編號</th><th>功能</th><th>使用者需求</th><th>現況</th></tr></thead>
           <tbody>
-            <tr><td>F-01</td><td>旅程管理</td><td>建立、編輯、刪除旅程（名稱、目的地、起訖日期、封面）</td><td>P0</td></tr>
-            <tr><td>F-02</td><td>每日行程</td><td>依日期自動產生 Day 1、Day 2…，每天可新增活動</td><td>P0</td></tr>
-            <tr><td>F-03</td><td>活動編輯</td><td>活動包含名稱、時間、地點、類型（景點／餐廳／交通／住宿）、備註</td><td>P0</td></tr>
-            <tr><td>F-04</td><td>排序調整</td><td>拖曳調整活動順序，或在不同天之間移動</td><td>P0</td></tr>
-            <tr><td>F-05</td><td>資料保存</td><td>資料存在瀏覽器本機，重新整理後不遺失</td><td>P0</td></tr>
-            <tr><td>F-06</td><td>地圖檢視</td><td>在地圖上標示當天所有地點與順序</td><td>P1</td></tr>
-            <tr><td>F-07</td><td>預算記帳</td><td>每個活動可記錄花費，依天與類別統計</td><td>P1</td></tr>
-            <tr><td>F-08</td><td>匯出／匯入</td><td>匯出 JSON 備份、匯入還原；匯出可列印版本</td><td>P1</td></tr>
-            <tr><td>F-09</td><td>行李清單</td><td>每趟旅程的待辦與行李勾選清單</td><td>P2</td></tr>
-            <tr><td>F-10</td><td>分享與共編</td><td>產生分享連結、多人同時編輯（需要後端）</td><td>P2</td></tr>
-            <tr><td>F-11</td><td>AI 行程建議</td><td>輸入目的地與天數，自動產生行程草稿</td><td>P2</td></tr>
+            <tr><td>F-01</td><td>機票清單</td><td>列出所有機票，<strong>在 App 中要最顯眼</strong>；仿照真實機票（登機證）的樣子做高級一點的美化，包含機票上會寫的資料</td><td><span class="badge done">第一版完成</span> 首頁顯示下一班飛機；旅程頁最上方是機票區，可新增、編輯、刪除，依出發時間自動排序</td></tr>
+            <tr><td>F-02</td><td>每日行程</td><td>行程日期、三餐、各地點的停留時間、交通；<strong>三餐用類似卡片的方式呈現</strong></td><td><span class="badge doing">部分</span> 已有每日分頁、活動時間、地點與類型；三餐卡片未做</td></tr>
+            <tr><td>F-03</td><td>自動排序</td><td>新增行程時自動排序，不用全部手動調整</td><td><span class="badge doing">部分</span> 目前要手動按「依時間排序」</td></tr>
+            <tr><td>F-04</td><td>快速找到行程</td><td>找某個行程不要花太多時間</td><td><span class="badge todo">未做</span> 做法待確認</td></tr>
+            <tr><td>F-05</td><td>攜帶物品清單</td><td>出發前要帶的物品清單</td><td><span class="badge todo">未做</span></td></tr>
+            <tr><td>F-06</td><td>護照期限檢查</td><td>用勾選（check）的方式，App 不自動判斷</td><td><span class="badge todo">未做</span></td></tr>
+            <tr><td>F-07</td><td>簽證與入境資料清單</td><td>用勾選（check）的方式，App 不自動判斷</td><td><span class="badge todo">未做</span></td></tr>
+            <tr><td>F-08</td><td>快速通關</td><td>確認入境時是否能使用快速通關</td><td><span class="badge todo">未做</span></td></tr>
+            <tr><td>F-09</td><td>預算</td><td>用<strong>台幣與目的地貨幣</strong>兩種：各帶了多少、花了多少</td><td><span class="badge doing">部分</span> 目前只有每日花費小計（單一幣別）；幣別選單已加入紐幣 NZD</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>旅途中</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>編號</th><th>功能</th><th>使用者需求</th><th>現況</th></tr></thead>
+          <tbody>
+            <tr><td>F-10</td><td>打開 App 的第一個畫面</td><td>拿出手機首先一定要確認：<strong>當下時間、機票時間、當下行程要做什麼</strong>；要使用 RWD</td><td><span class="badge done">第一版完成</span> 首頁依序顯示：大字時間與日期 → 旅程與 Day 幾 → 下一班飛機（登機證）→ 當下行程（現在／接下來）。時間每分鐘自動更新</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>共用情境</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>編號</th><th>項目</th><th>使用者需求</th><th>現況</th></tr></thead>
+          <tbody>
+            <tr><td>F-11</td><td>與旅伴一起使用</td><td><strong>兩台手機看同一份行程</strong></td><td><span class="badge todo">未做</span> 需要雲端同步（D-012），目前資料只存在單一瀏覽器</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>原 AI 草案項目的處理</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>原草案項目</th><th>處理</th></tr></thead>
+          <tbody>
+            <tr><td>旅程管理、每日行程、活動編輯、拖曳排序、本機保存</td><td>已做成第一版，保留，作為 F-02、F-03 的基礎</td></tr>
+            <tr><td>地圖檢視</td><td>使用者沒有提出，暫不做（D-011）</td></tr>
+            <tr><td>匯出／匯入</td><td>使用者沒有提出，暫不做（D-011）</td></tr>
+            <tr><td>行李清單</td><td>由使用者提出的 F-05「攜帶物品清單」取代</td></tr>
+            <tr><td>分享與共編</td><td>併入 F-11：兩台手機看同一份行程（D-012）</td></tr>
+            <tr><td>AI 行程建議</td><td>維持 P2，之後再說（D-009）</td></tr>
           </tbody>
         </table>
       </div>
@@ -279,14 +314,14 @@
     <!-- 5 -->
     <section id="tech">
       <h2>5. 技術架構</h2>
-      <div class="note">目前標準：<strong>可互動的純前端</strong>，沒有後端。資料存在使用者瀏覽器的 localStorage。</div>
+      <div class="note">目前標準：<strong>可互動的純前端</strong>，沒有後端。資料存在使用者瀏覽器的 localStorage。因為要兩台手機看同一份行程（D-012），之後需要加入雲端同步，使用哪個服務待確認。</div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>層面</th><th>採用</th><th>理由</th></tr></thead>
           <tbody>
             <tr><td>前端</td><td>原生 HTML / CSS / JavaScript，無框架、無建置流程</td><td>直接雙擊 <code>index.html</code> 就能用，也能原封不動放上 GitHub Pages；P0 功能規模不需要框架</td></tr>
             <tr><td>樣式</td><td>CSS 變數（design tokens），支援淺色／深色模式</td><td>所有間距、字級、圓角、顏色集中管理，依 ui-design-reference 規範</td></tr>
-            <tr><td>畫面切換</td><td>hash 路由：<code>#/</code>、<code>#/trip/:id/:day</code></td><td>不需要伺服器設定，重新整理或分享連結都會停在同一頁</td></tr>
+            <tr><td>畫面切換</td><td>hash 路由：<code>#/</code> 首頁、<code>#/trips</code> 旅程列表、<code>#/trip/:id/:day</code> 旅程詳情</td><td>不需要伺服器設定，重新整理或分享連結都會停在同一頁</td></tr>
             <tr><td>資料儲存</td><td>localStorage，key <code>travelplan.v1</code></td><td>MVP 不需要帳號；key 帶版本號方便之後資料遷移</td></tr>
             <tr><td>拖曳排序</td><td>自行以 Pointer Events 實作</td><td>同時支援滑鼠與手機觸控，不需要外部套件</td></tr>
             <tr><td>地圖（P1）</td><td>Leaflet + OpenStreetMap（預定）</td><td>免費、不需要 API 金鑰，可用 CDN 載入</td></tr>
@@ -308,7 +343,9 @@
       <ul>
         <li><strong>Storage</strong>：<code>load()</code>／<code>save()</code>，讀寫 localStorage，失敗時以 toast 提示。</li>
         <li><strong>Routing</strong>：<code>parseRoute()</code> 解析網址 hash，<code>render()</code> 依路由重畫整個畫面。</li>
-        <li><strong>Views</strong>：<code>renderList()</code> 旅程列表、<code>renderTrip()</code> 旅程詳情。</li>
+        <li><strong>Views</strong>：<code>renderHome()</code> 首頁、<code>renderList()</code> 旅程列表、<code>renderTrip()</code> 旅程詳情。</li>
+        <li><strong>Home</strong>：<code>homeTrip()</code> 選出要顯示的旅程（旅途中 &gt; 最近要出發 &gt; 最近結束），<code>activityNowNext()</code> 找出現在與接下來的活動，<code>startClock()</code> 每分鐘重畫。</li>
+        <li><strong>機票</strong>：<code>boardingPass()</code> 產生登機證樣式的卡片，<code>openFlightForm()</code> 新增／編輯機票。</li>
         <li><strong>Sheet</strong>：<code>openSheet()</code> 共用的底部面板，旅程與活動表單都用它。</li>
         <li><strong>Undo</strong>：<code>snapshot()</code> 在刪除前保存資料快照，toast 上的「復原」可還原。</li>
       </ul>
@@ -317,6 +354,7 @@
     <!-- 6 -->
     <section id="data">
       <h2>6. 資料模型（草案）</h2>
+      <div class="note">以下是目前程式使用的模型，已加入機票（Flight）。證件、物品清單、預算等資料做到該功能時再補上。</div>
 <pre><code>type Trip = {
   id: string;
   title: string;          // 例：東京五日遊
@@ -325,8 +363,28 @@
   endDate: string;
   currency: string;       // 例：JPY
   days: Day[];
+  flights: Flight[];      // 依出發時間排序
   createdAt: string;
   updatedAt: string;
+};
+
+type Flight = {
+  id: string;
+  airline: string;        // 例：紐西蘭航空
+  flightNo: string;       // 例：NZ 78
+  passenger: string;      // 與護照相同
+  from: { code: string; city: string };  // 機場代碼 3 碼，例：TPE
+  to:   { code: string; city: string };
+  departDate: string;     // YYYY-MM-DD，當地時間
+  departTime: string;     // HH:mm，當地時間
+  arriveDate: string;
+  arriveTime: string;
+  boardingTime: string;
+  cabin: string;          // 經濟艙／豪華經濟艙／商務艙／頭等艙
+  terminal: string;
+  gate: string;
+  seat: string;
+  bookingRef: string;     // 訂位代號
 };
 
 type Day = {
@@ -357,15 +415,22 @@ type Activity = {
         <table>
           <thead><tr><th>畫面</th><th>內容</th><th>主要操作</th></tr></thead>
           <tbody>
-            <tr><td>旅程列表（首頁）</td><td>所有旅程卡片，顯示名稱、日期、天數</td><td>新增旅程、進入旅程</td></tr>
+            <tr><td>首頁（打開 App 第一個畫面）</td><td>大字現在時間與日期、旅程名稱與 Day 幾、下一班飛機（登機證）、當下行程（現在／接下來）</td><td>點旅程或行程進入當天行程、「所有旅程」</td></tr>
+            <tr><td>旅程列表</td><td>所有旅程卡片，顯示名稱、日期、天數</td><td>新增旅程、進入旅程、返回首頁</td></tr>
             <tr><td>新增／編輯旅程</td><td>名稱、目的地、日期區間、幣別</td><td>儲存、刪除</td></tr>
-            <tr><td>旅程詳情</td><td>上方日期分頁（Day 1、Day 2…），下方當天活動時間軸</td><td>新增活動、拖曳排序、切換地圖</td></tr>
+            <tr><td>旅程詳情</td><td>最上方機票區（登機證可左右滑動），接著日期分頁（Day 1、Day 2…），下方當天活動時間軸</td><td>新增／編輯機票、新增活動、拖曳排序</td></tr>
+            <tr><td>機票編輯</td><td>底部彈出面板：航空公司、航班、乘客、起訖機場、起降時間、登機時間、艙等、航廈、登機門、座位、訂位代號</td><td>儲存、刪除</td></tr>
             <tr><td>活動編輯</td><td>底部彈出面板，填寫活動欄位</td><td>儲存、刪除、移到其他天</td></tr>
-            <tr><td>地圖（P1）</td><td>當天地點標記與連線</td><td>點標記看活動</td></tr>
-            <tr><td>預算（P1）</td><td>總花費、每日與類別統計</td><td>篩選</td></tr>
           </tbody>
         </table>
       </div>
+      <h3>RWD 版面</h3>
+      <ul>
+        <li><strong>手機（&lt; 960px）</strong>：首頁由上到下：時間 → 旅程 → 下一班飛機 → 當下行程。</li>
+        <li><strong>桌機（≥ 960px）</strong>：首頁分兩欄，左邊是時間、旅程、當下行程，右邊是機票。</li>
+        <li><strong>登機證</strong>：依卡片本身寬度切換（container query）。寬度不到 560px 時是直式，存根在下方；560px 以上改成橫式，存根在右邊，跟實體登機證一樣。</li>
+        <li>已在 375px、390px、768px、1280px 寬度和深色模式下截圖檢查。</li>
+      </ul>
       <h3>主要使用流程</h3>
       <p>開啟 App → 新增旅程（填目的地與日期）→ 自動產生每日分頁 → 逐日新增活動 → 拖曳調整順序 → 旅途中用手機查看。</p>
       <p>第一次使用時列表是空的，可以點「看範例行程」載入一份東京四日遊的範例資料。</p>
@@ -401,11 +466,11 @@ type Activity = {
           <thead><tr><th>里程碑</th><th>內容</th><th>狀態</th></tr></thead>
           <tbody>
             <tr><td>M0</td><td>建立 repo 與規劃文件</td><td><span class="badge done">完成</span></td></tr>
-            <tr><td>M1</td><td>需求與規格定案</td><td><span class="badge done">完成</span></td></tr>
+            <tr><td>M1</td><td>需求與規格定案</td><td><span class="badge doing">依使用者需求重新整理中</span></td></tr>
             <tr><td>M2</td><td>專案骨架</td><td><span class="badge done">完成</span></td></tr>
-            <tr><td>M3</td><td>MVP：F-01 ～ F-05</td><td><span class="badge doing">第一版完成，待實測</span></td></tr>
-            <tr><td>M3.5</td><td>部署到 GitHub Pages</td><td><span class="badge todo">未開始</span></td></tr>
-            <tr><td>M4</td><td>P1：地圖、預算、匯出</td><td><span class="badge todo">未開始</span></td></tr>
+            <tr><td>M3</td><td>MVP 第一版（依原草案）</td><td><span class="badge done">完成，待依新規格調整</span></td></tr>
+            <tr><td>M4</td><td>依新規格開發 F-01 ～ F-11</td><td><span class="badge doing">進行中：F-10 首頁、F-01 機票第一版完成</span></td></tr>
+            <tr><td>M5</td><td>部署到 GitHub Pages</td><td><span class="badge todo">未開始</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -426,6 +491,17 @@ type Activity = {
             <tr><td>D-005</td><td>2026-10-12</td><td>規劃文件移到 <code>docs/index.html</code>，根目錄 <code>index.html</code> 改為 App 入口</td><td>App 與 GitHub Pages 都需要根目錄的 index.html</td></tr>
             <tr><td>D-006</td><td>2026-10-12</td><td>所有畫面設計依 ui-design-reference 規範</td><td>使用者要求；用成熟產品的模式避免「AI 感」設計</td></tr>
             <tr><td>D-007</td><td>2026-10-12</td><td>修改旅程日期時，活動依「第幾天」保留（Day 1 仍是 Day 1）</td><td>行程整體往後挪是最常見的情況；縮短天數時以可復原 toast 提示被移除的活動</td></tr>
+            <tr><td>D-008</td><td>2026-10-12</td><td>功能規格改依使用者實際需求重新整理，原 AI 草案不再作為依據</td><td>原規格是 AI 先撰寫的，使用者要先自己做功能規劃</td></tr>
+            <tr><td>D-009</td><td>2026-10-12</td><td>AI 行程建議維持 P2，之後再說</td><td>使用者決定</td></tr>
+            <tr><td>D-010</td><td>2026-10-12</td><td>部署平台採用 GitHub Pages</td><td>使用者決定；程式已在 GitHub repo，純靜態檔案可直接上線</td></tr>
+            <tr><td>D-011</td><td>2026-10-12</td><td>只做使用者提出的功能，不額外增加；原草案中使用者沒提到的地圖、匯出／匯入暫不做</td><td>使用者要求「依照我說的進行處理，不多做」</td></tr>
+            <tr><td>D-012</td><td>2026-10-12</td><td>要用兩台手機看同一份行程，之後需要雲端同步</td><td>使用者決定；localStorage 只存在單一瀏覽器，無法跨手機</td></tr>
+            <tr><td>D-013</td><td>2026-10-12</td><td>先做打開 App 的第一個畫面（F-10），並使用 RWD</td><td>使用者決定</td></tr>
+            <tr><td>D-014</td><td>2026-10-12</td><td>機票仿照真實登機證樣式美化，包含登機證上會寫的資料</td><td>使用者決定；首頁要顯示機票時間，所以機票（F-01）與首頁一起做</td></tr>
+            <tr><td>D-015</td><td>2026-10-12</td><td>預算使用台幣與目的地貨幣，記錄各帶了多少、花了多少</td><td>使用者決定</td></tr>
+            <tr><td>D-016</td><td>2026-10-12</td><td>護照與簽證用勾選方式，App 不做判斷</td><td>使用者決定</td></tr>
+            <tr><td>D-017</td><td>2026-10-12</td><td>三餐用類似卡片的方式呈現</td><td>使用者決定</td></tr>
+            <tr><td>D-018</td><td>2026-10-12</td><td>首頁判斷「下一班飛機」與「現在行程」時，以手機的當地時間比較機票與行程上的時間</td><td>機票上印的都是當地時間，旅途中手機也會切到當地時區；不另外處理時區換算</td></tr>
           </tbody>
         </table>
       </div>
@@ -434,6 +510,42 @@ type Activity = {
     <!-- 10 -->
     <section id="log">
       <h2>10. 開發日誌</h2>
+      <div class="log-entry">
+        <div class="date">2026-10-12（功能規劃第二輪 + 首頁與機票）</div>
+        <ul>
+          <li>使用者回答待確認問題：
+            <ul>
+              <li>與旅伴：要用兩台手機看同一份行程（D-012）。</li>
+              <li>先做打開 App 的第一個畫面，要使用 RWD（D-013）。</li>
+              <li>機票仿照真實機票的樣子，做高級一點的美化，包含機票上會寫的資料（D-014）。</li>
+              <li>預算用台幣與目的城市的貨幣，記錄各帶了多少、花了多少（D-015）。</li>
+              <li>護照與簽證用勾選的方式就好，不判斷（D-016）。</li>
+              <li>三餐用類似卡片的方式呈現（D-017）。</li>
+            </ul>
+          </li>
+          <li>完成首頁（F-10）：大字時間與日期、旅程與 Day 幾、下一班飛機、當下行程（現在／接下來），每分鐘自動更新。原本的旅程列表移到 <code>#/trips</code>。</li>
+          <li>完成機票第一版（F-01）：登機證樣式卡片（航空公司、起訖機場代碼與城市、起降時間、乘客、航班、艙等、登機時間、航廈、登機門、座位、訂位代號、條碼），撕線兩側有半圓缺口；旅程頁最上方新增機票區，可新增、編輯、刪除（可復原），依出發時間自動排序。</li>
+          <li>幣別選單加入紐幣 NZD；範例行程改為紐西蘭南島 7 天（含 4 張範例機票）。</li>
+          <li>在 375px、390px、768px、1280px 寬度與深色模式下用 headless Chrome 截圖檢查；修正首頁在手機寬度會被長文字撐出橫向捲動的問題。</li>
+        </ul>
+      </div>
+      <div class="log-entry">
+        <div class="date">2026-10-12（功能規劃討論）</div>
+        <ul>
+          <li>使用者指出原功能規格是 AI 先寫好的，要先重新做功能規劃（D-008）。</li>
+          <li>決定部署平台用 GitHub Pages（D-010）；AI 行程建議維持 P2（D-009）。</li>
+          <li>需求訪談結果：
+            <ul>
+              <li>使用情境：本人與旅伴一起用；國外自由行；目前預設旅程為紐西蘭南島。</li>
+              <li>現況：用 iPhone 備忘錄排行程，沒有視覺化介面；新增行程無法自動排序，全靠手動；找行程很花時間。</li>
+              <li>出發前要做：攜帶物品清單、護照期限檢查、簽證與入境所需資料清單、是否能快速通關入境、機票清單（需最顯眼）、行程日期／三餐／各地點停留時間／交通、預算（總花費）。</li>
+              <li>旅途中：拿出手機首先要確認當下時間、機票時間，以及當下行程要做什麼。</li>
+              <li>不需要的功能：目前沒想到。原則是依使用者說的做，不多做（D-011）。</li>
+            </ul>
+          </li>
+          <li>依訪談結果改寫第 3 節功能規格（F-01～F-11），並對照目前程式標出完成程度。</li>
+        </ul>
+      </div>
       <div class="log-entry">
         <div class="date">2026-10-12（MVP 第一版）</div>
         <ul>
@@ -463,9 +575,20 @@ type Activity = {
         <li class="answered"><span class="q">技術選型是否採用 React + TypeScript + Vite？還是純 HTML/CSS/JS？</span><span class="a">→ 原生 HTML / CSS / JS（D-004）</span></li>
         <li class="answered"><span class="q">是否需要帳號登入與雲端同步？</span><span class="a">→ 目前不需要，純前端（D-003）</span></li>
         <li class="answered"><span class="q">規劃文件是否移到 <code>docs/index.html</code>？</span><span class="a">→ 已移動（D-005）</span></li>
-        <li>是否要做 AI 行程建議？若要，放在哪個階段？</li>
-        <li>部署平台：GitHub Pages、Vercel 或其他？</li>
-        <li>P1 功能（地圖、預算統計、匯出／匯入）的先後順序？</li>
+        <li class="answered"><span class="q">是否要做 AI 行程建議？若要，放在哪個階段？</span><span class="a">→ 維持 P2，之後再說（D-009）</span></li>
+        <li class="answered"><span class="q">部署平台：GitHub Pages、Vercel 或其他？</span><span class="a">→ GitHub Pages（D-010）</span></li>
+        <li class="answered"><span class="q">P1 功能（地圖、預算統計、匯出／匯入）的先後順序？</span><span class="a">→ 改依使用者需求重新規劃，原 P1 列表作廢（D-008、D-011）</span></li>
+        <li class="answered"><span class="q">新功能 F-01～F-11 要先做哪些？</span><span class="a">→ 先做打開 App 的第一個畫面（D-013）；其餘順序待定</span></li>
+        <li class="answered"><span class="q">與旅伴怎麼一起用（F-11）？</span><span class="a">→ 兩台手機看同一份行程，需要雲端同步（D-012）</span></li>
+        <li class="answered"><span class="q">三餐（F-02）要怎麼呈現？</span><span class="a">→ 類似卡片的方式（D-017）</span></li>
+        <li class="answered"><span class="q">護照期限、簽證入境資料（F-06、F-07）要不要自動判斷？</span><span class="a">→ 用勾選的方式，不判斷（D-016）</span></li>
+        <li class="answered"><span class="q">機票清單（F-01）要記錄哪些欄位？</span><span class="a">→ 仿照真實機票，包含機票上會寫的資料（D-014）</span></li>
+        <li class="answered"><span class="q">預算（F-09）用什麼幣別？</span><span class="a">→ 台幣與目的地貨幣，各帶了多少、花了多少（D-015）</span></li>
+        <li>雲端同步（F-11）要用哪個服務？兩台手機是否都要能編輯，還是一台編輯、一台只看？是否需要登入？</li>
+        <li>預算的「帶了多少」是兩人合計，還是每人分開記？</li>
+        <li>快速找到行程（F-04）要怎麼找：用關鍵字搜尋、依類型篩選，或其他方式？</li>
+        <li>快速通關（F-08）也用勾選的方式嗎？</li>
+        <li>剩下的功能（F-02 三餐卡片、F-03 自動排序、F-04、F-05～F-09、F-11）開發順序為何？</li>
       </ul>
     </section>
   </main>
