@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TravelPlan 規劃文件</title>
+<meta name="description" content="行程規劃 Web APP 的計劃過程、規格與開發紀錄">
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --text: #1d1d1b;
+    --muted: #6b6b66;
+    --border: #e3e3de;
+    --accent: #2f6f62;
+    --accent-soft: #e4f0ec;
+    --done: #2f6f62;
+    --doing: #b26b00;
+    --todo: #8a8a84;
+    --code-bg: #f0f0ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615;
+      --surface: #1f1f1d;
+      --text: #ececE8;
+      --muted: #a3a39c;
+      --border: #33332f;
+      --accent: #6cc2ad;
+      --accent-soft: #1f3a33;
+      --done: #6cc2ad;
+      --doing: #e3a94a;
+      --todo: #8a8a84;
+      --code-bg: #282825;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161615;
+    --surface: #1f1f1d;
+    --text: #ececE8;
+    --muted: #a3a39c;
+    --border: #33332f;
+    --accent: #6cc2ad;
+    --accent-soft: #1f3a33;
+    --done: #6cc2ad;
+    --doing: #e3a94a;
+    --todo: #8a8a84;
+    --code-bg: #282825;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.7;
+    font-size: 16px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 40px;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  nav.toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    font-size: 14px;
+  }
+  nav.toc .label { color: var(--muted); font-size: 12px; letter-spacing: .08em; margin-bottom: 8px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc a {
+    display: block;
+    padding: 4px 10px;
+    border-left: 2px solid var(--border);
+    color: var(--muted);
+    text-decoration: none;
+  }
+  nav.toc a:hover { color: var(--text); border-left-color: var(--accent); }
+
+  header.page { margin-bottom: 40px; }
+  header.page h1 { font-size: 32px; line-height: 1.25; margin: 0 0 8px; }
+  header.page p { margin: 0; color: var(--muted); }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; font-size: 14px; color: var(--muted); }
+
+  section { margin-bottom: 56px; }
+  h2 { font-size: 22px; margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 17px; margin: 28px 0 10px; }
+  p { margin: 0 0 12px; }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: none; padding: 0; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .note {
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 15px;
+  }
+
+  .table-wrap { overflow-x: auto; margin: 12px 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--surface); }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+  .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .done  { color: var(--done); }
+  .doing { color: var(--doing); }
+  .todo  { color: var(--todo); }
+
+  ol.timeline { list-style: none; padding: 0; margin: 0; }
+  ol.timeline li { position: relative; padding: 0 0 20px 24px; border-left: 2px solid var(--border); }
+  ol.timeline li:last-child { padding-bottom: 0; }
+  ol.timeline li::before {
+    content: ""; position: absolute; left: -7px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--todo);
+  }
+  ol.timeline li.is-done::before  { border-color: var(--done); background: var(--done); }
+  ol.timeline li.is-doing::before { border-color: var(--doing); }
+  ol.timeline .t-title { font-weight: 600; }
+  ol.timeline .t-desc { color: var(--muted); font-size: 15px; }
+
+  .log-entry { border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; margin-bottom: 20px; }
+  .log-entry .date { font-size: 13px; color: var(--muted); }
+  .log-entry ul { margin: 6px 0 0; padding-left: 20px; }
+
+  ul.checklist { list-style: none; padding: 0; }
+  ul.checklist li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  ul.checklist li::before { content: "☐ "; color: var(--muted); }
+  ul.checklist li.answered::before { content: "☑ "; color: var(--done); }
+  ul.checklist li.answered .q { color: var(--muted); }
+  ul.checklist .a { display: block; font-size: 15px; }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; gap: 24px; padding: 24px 16px 64px; }
+    nav.toc { position: static; }
+    nav.toc ol { display: flex; flex-wrap: wrap; gap: 6px; }
+    nav.toc a { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+    header.page h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="toc" aria-label="目錄">
+    <div class="label">目錄</div>
+    <ol>
+      <li><a href="#overview">1. 專案概述</a></li>
+      <li><a href="#process">2. 規劃流程</a></li>
+      <li><a href="#features">3. 功能規格</a></li>
+      <li><a href="#nfr">4. 非功能需求</a></li>
+      <li><a href="#tech">5. 技術架構</a></li>
+      <li><a href="#data">6. 資料模型</a></li>
+      <li><a href="#screens">7. 畫面規劃</a></li>
+      <li><a href="#milestones">8. 里程碑</a></li>
+      <li><a href="#decisions">9. 決策紀錄</a></li>
+      <li><a href="#log">10. 開發日誌</a></li>
+      <li><a href="#questions">11. 待確認問題</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="page">
+      <h1>TravelPlan 行程規劃 Web APP</h1>
+      <p>這份文件記錄專案的計劃過程、功能規格、技術決策與開發紀錄，會隨開發進度持續更新。</p>
+      <div class="meta">
+        <span>Repo：<a href="https://github.com/ChiCheLo/TravelPlan_WebAPP">ChiCheLo/TravelPlan_WebAPP</a></span>
+        <span>建立日期：2026-10-12</span>
+        <span>目前階段：<span class="badge doing">MVP 開發</span></span>
+        <span><a href="../index.html">開啟 App</a></span>
+      </div>
+    </header>
+
+    <!-- 1 -->
+    <section id="overview">
+      <h2>1. 專案概述</h2>
+      <h3>目標</h3>
+      <p>做一個在手機和電腦上都好用的旅遊行程規劃工具。使用者可以建立旅程、逐日安排景點與交通、在地圖上看路線，並記錄預算。</p>
+      <h3>目標使用者</h3>
+      <ul>
+        <li>自助旅行者：需要把散落在筆記、Google Maps、試算表的資訊整合在一起。</li>
+        <li>結伴旅行的小團體：需要一份大家都看得到的行程（後續版本）。</li>
+      </ul>
+      <h3>要解決的問題</h3>
+      <ul>
+        <li>行程、地點、交通、花費分散在不同工具。</li>
+        <li>旅途中用手機查看行程不方便。</li>
+        <li>難以一眼看出每天的時間安排是否合理。</li>
+      </ul>
+    </section>
+
+    <!-- 2 -->
+    <section id="process">
+      <h2>2. 規劃流程</h2>
+      <p>專案依照以下階段推進，每個階段完成後在「開發日誌」補上紀錄。</p>
+      <ol class="timeline">
+        <li class="is-done">
+          <div class="t-title">階段 0：建立專案 <span class="badge done">完成</span></div>
+          <div class="t-desc">初始化 git、連接 GitHub repo、建立本規劃文件。</div>
+        </li>
+        <li class="is-done">
+          <div class="t-title">階段 1：需求定義 <span class="badge done">完成</span></div>
+          <div class="t-desc">MVP 以「可互動的純前端」為標準，範圍為 P0 功能（F-01～F-05）。</div>
+        </li>
+        <li class="is-done">
+          <div class="t-title">階段 2：規格設計 <span class="badge done">完成</span></div>
+          <div class="t-desc">定案資料模型、畫面流程；設計依 ui-design-reference 規範（見第 7 節）。</div>
+        </li>
+        <li class="is-done">
+          <div class="t-title">階段 3：技術選型與專案骨架 <span class="badge done">完成</span></div>
+          <div class="t-desc">採用原生 HTML / CSS / JavaScript，無建置流程；規劃文件移到 <code>docs/</code>。</div>
+        </li>
+        <li class="is-doing">
+          <div class="t-title">階段 4：MVP 開發 <span class="badge doing">進行中</span></div>
+          <div class="t-desc">P0 功能第一版已完成，待實機測試。</div>
+        </li>
+        <li>
+          <div class="t-title">階段 5：測試與修正 <span class="badge todo">未開始</span></div>
+          <div class="t-desc">手機／桌機實測、修 bug、調整體驗。</div>
+        </li>
+        <li>
+          <div class="t-title">階段 6：部署上線 <span class="badge todo">未開始</span></div>
+          <div class="t-desc">部署到 GitHub Pages（或其他平台），之後進入迭代。</div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- 3 -->
+    <section id="features">
+      <h2>3. 功能規格</h2>
+      <div class="note">優先級：<strong>P0</strong> = MVP 必備，<strong>P1</strong> = MVP 後第一批，<strong>P2</strong> = 之後再說。目前為草案，待確認。</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>編號</th><th>功能</th><th>說明</th><th>優先級</th></tr></thead>
+          <tbody>
+            <tr><td>F-01</td><td>旅程管理</td><td>建立、編輯、刪除旅程（名稱、目的地、起訖日期、封面）</td><td>P0</td></tr>
+            <tr><td>F-02</td><td>每日行程</td><td>依日期自動產生 Day 1、Day 2…，每天可新增活動</td><td>P0</td></tr>
+            <tr><td>F-03</td><td>活動編輯</td><td>活動包含名稱、時間、地點、類型（景點／餐廳／交通／住宿）、備註</td><td>P0</td></tr>
+            <tr><td>F-04</td><td>排序調整</td><td>拖曳調整活動順序，或在不同天之間移動</td><td>P0</td></tr>
+            <tr><td>F-05</td><td>資料保存</td><td>資料存在瀏覽器本機，重新整理後不遺失</td><td>P0</td></tr>
+            <tr><td>F-06</td><td>地圖檢視</td><td>在地圖上標示當天所有地點與順序</td><td>P1</td></tr>
+            <tr><td>F-07</td><td>預算記帳</td><td>每個活動可記錄花費，依天與類別統計</td><td>P1</td></tr>
+            <tr><td>F-08</td><td>匯出／匯入</td><td>匯出 JSON 備份、匯入還原；匯出可列印版本</td><td>P1</td></tr>
+            <tr><td>F-09</td><td>行李清單</td><td>每趟旅程的待辦與行李勾選清單</td><td>P2</td></tr>
+            <tr><td>F-10</td><td>分享與共編</td><td>產生分享連結、多人同時編輯（需要後端）</td><td>P2</td></tr>
+            <tr><td>F-11</td><td>AI 行程建議</td><td>輸入目的地與天數，自動產生行程草稿</td><td>P2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="nfr">
+      <h2>4. 非功能需求</h2>
+      <ul>
+        <li><strong>手機優先：</strong>以手機螢幕為主要設計對象，桌機版面延伸。</li>
+        <li><strong>介面語言：</strong>繁體中文。</li>
+        <li><strong>效能：</strong>首次載入在一般 4G 網路下 3 秒內可操作。</li>
+        <li><strong>離線可讀：</strong>旅途中沒網路時仍能查看已存的行程（P1，PWA）。</li>
+        <li><strong>隱私：</strong>MVP 不需要帳號，資料只存在使用者自己的裝置。</li>
+      </ul>
+    </section>
+
+    <!-- 5 -->
+    <section id="tech">
+      <h2>5. 技術架構</h2>
+      <div class="note">目前標準：<strong>可互動的純前端</strong>，沒有後端。資料存在使用者瀏覽器的 localStorage。</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>層面</th><th>採用</th><th>理由</th></tr></thead>
+          <tbody>
+            <tr><td>前端</td><td>原生 HTML / CSS / JavaScript，無框架、無建置流程</td><td>直接雙擊 <code>index.html</code> 就能用，也能原封不動放上 GitHub Pages；P0 功能規模不需要框架</td></tr>
+            <tr><td>樣式</td><td>CSS 變數（design tokens），支援淺色／深色模式</td><td>所有間距、字級、圓角、顏色集中管理，依 ui-design-reference 規範</td></tr>
+            <tr><td>畫面切換</td><td>hash 路由：<code>#/</code>、<code>#/trip/:id/:day</code></td><td>不需要伺服器設定，重新整理或分享連結都會停在同一頁</td></tr>
+            <tr><td>資料儲存</td><td>localStorage，key <code>travelplan.v1</code></td><td>MVP 不需要帳號；key 帶版本號方便之後資料遷移</td></tr>
+            <tr><td>拖曳排序</td><td>自行以 Pointer Events 實作</td><td>同時支援滑鼠與手機觸控，不需要外部套件</td></tr>
+            <tr><td>地圖（P1）</td><td>Leaflet + OpenStreetMap（預定）</td><td>免費、不需要 API 金鑰，可用 CDN 載入</td></tr>
+            <tr><td>部署</td><td>GitHub Pages（預定）</td><td>與 repo 整合、免費、純靜態檔案即可</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>若之後功能變多（共編、AI 建議、多頁狀態複雜），再評估改用 React + TypeScript + Vite。</p>
+      <h3>目錄結構</h3>
+<pre><code>TravelPlan_WebAPP/
+├── index.html         # App 入口
+├── css/
+│   └── style.css      # design tokens 與所有樣式
+├── js/
+│   └── app.js         # 狀態、路由、畫面渲染、表單、拖曳排序
+└── docs/
+    └── index.html     # 本規劃文件</code></pre>
+      <h3>app.js 結構</h3>
+      <ul>
+        <li><strong>Storage</strong>：<code>load()</code>／<code>save()</code>，讀寫 localStorage，失敗時以 toast 提示。</li>
+        <li><strong>Routing</strong>：<code>parseRoute()</code> 解析網址 hash，<code>render()</code> 依路由重畫整個畫面。</li>
+        <li><strong>Views</strong>：<code>renderList()</code> 旅程列表、<code>renderTrip()</code> 旅程詳情。</li>
+        <li><strong>Sheet</strong>：<code>openSheet()</code> 共用的底部面板，旅程與活動表單都用它。</li>
+        <li><strong>Undo</strong>：<code>snapshot()</code> 在刪除前保存資料快照，toast 上的「復原」可還原。</li>
+      </ul>
+    </section>
+
+    <!-- 6 -->
+    <section id="data">
+      <h2>6. 資料模型（草案）</h2>
+<pre><code>type Trip = {
+  id: string;
+  title: string;          // 例：東京五日遊
+  destination: string;
+  startDate: string;      // YYYY-MM-DD
+  endDate: string;
+  currency: string;       // 例：JPY
+  days: Day[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type Day = {
+  date: string;           // YYYY-MM-DD
+  activities: Activity[]; // 陣列順序即顯示順序
+};
+
+type Activity = {
+  id: string;
+  title: string;
+  type: "sight" | "food" | "transport" | "lodging" | "other";
+  startTime?: string;     // HH:mm
+  endTime?: string;
+  location?: {
+    name: string;
+    lat?: number;
+    lng?: number;
+  };
+  cost?: number;
+  note?: string;
+};</code></pre>
+    </section>
+
+    <!-- 7 -->
+    <section id="screens">
+      <h2>7. 畫面規劃</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>畫面</th><th>內容</th><th>主要操作</th></tr></thead>
+          <tbody>
+            <tr><td>旅程列表（首頁）</td><td>所有旅程卡片，顯示名稱、日期、天數</td><td>新增旅程、進入旅程</td></tr>
+            <tr><td>新增／編輯旅程</td><td>名稱、目的地、日期區間、幣別</td><td>儲存、刪除</td></tr>
+            <tr><td>旅程詳情</td><td>上方日期分頁（Day 1、Day 2…），下方當天活動時間軸</td><td>新增活動、拖曳排序、切換地圖</td></tr>
+            <tr><td>活動編輯</td><td>底部彈出面板，填寫活動欄位</td><td>儲存、刪除、移到其他天</td></tr>
+            <tr><td>地圖（P1）</td><td>當天地點標記與連線</td><td>點標記看活動</td></tr>
+            <tr><td>預算（P1）</td><td>總花費、每日與類別統計</td><td>篩選</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>主要使用流程</h3>
+      <p>開啟 App → 新增旅程（填目的地與日期）→ 自動產生每日分頁 → 逐日新增活動 → 拖曳調整順序 → 旅途中用手機查看。</p>
+      <p>第一次使用時列表是空的，可以點「看範例行程」載入一份東京四日遊的範例資料。</p>
+
+      <h3>設計規範（依 ui-design-reference）</h3>
+      <p>所有畫面設計都先參考 ui-design-reference，再動手實作。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>項目</th><th>規範</th></tr></thead>
+          <tbody>
+            <tr><td>風格原型</td><td>原生 iOS（Things 3 類）為主：Large Title、底部面板、清單；旅程卡片比例參考圖片主導的市集類 App</td></tr>
+            <tr><td>間距</td><td>4/8 格線：4、8、12、16、24、32、48；手機左右邊界 16</td></tr>
+            <tr><td>字級</td><td>12 / 14 / 16 / 18 / 20 / 30；字重只用 400 / 600 / 700；金額與時間用等寬數字</td></tr>
+            <tr><td>圓角</td><td>6 / 8 / 12 / 16 / 24 / full；底部面板頂部 24</td></tr>
+            <tr><td>色彩</td><td>暖灰中性色 + 單一綠色主色（只用在主要按鈕、選取狀態）；活動類型各有一個語意色</td></tr>
+            <tr><td>深色模式</td><td>背景 #121211，用表面亮度分層，不靠陰影；邊框為白色 8% 透明度</td></tr>
+            <tr><td>按鈕</td><td>每個畫面只有一個主要按鈕；點擊區至少 44×44；有 hover / focus / active 狀態</td></tr>
+            <tr><td>圖示</td><td>統一使用 Lucide 線條風格 SVG，不用 emoji</td></tr>
+            <tr><td>表單</td><td>標籤在欄位上方；手機欄位高 48；錯誤訊息顯示在表單內，說明怎麼修正</td></tr>
+            <tr><td>刪除</td><td>直接刪除並顯示可「復原」的 toast（5 秒），不跳確認對話框</td></tr>
+            <tr><td>動態</td><td>底部面板 360ms、ease-out-expo；只動 transform 與 opacity；尊重「減少動態效果」設定</td></tr>
+            <tr><td>狀態</td><td>旅程列表、每日行程都有空狀態（圖示 + 說明 + 行動）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section id="milestones">
+      <h2>8. 里程碑</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>里程碑</th><th>內容</th><th>狀態</th></tr></thead>
+          <tbody>
+            <tr><td>M0</td><td>建立 repo 與規劃文件</td><td><span class="badge done">完成</span></td></tr>
+            <tr><td>M1</td><td>需求與規格定案</td><td><span class="badge done">完成</span></td></tr>
+            <tr><td>M2</td><td>專案骨架</td><td><span class="badge done">完成</span></td></tr>
+            <tr><td>M3</td><td>MVP：F-01 ～ F-05</td><td><span class="badge doing">第一版完成，待實測</span></td></tr>
+            <tr><td>M3.5</td><td>部署到 GitHub Pages</td><td><span class="badge todo">未開始</span></td></tr>
+            <tr><td>M4</td><td>P1：地圖、預算、匯出</td><td><span class="badge todo">未開始</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section id="decisions">
+      <h2>9. 決策紀錄</h2>
+      <p>每個重要決策記一筆：做了什麼決定、為什麼。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>編號</th><th>日期</th><th>決策</th><th>理由</th></tr></thead>
+          <tbody>
+            <tr><td>D-001</td><td>2026-10-12</td><td>使用 GitHub repo <code>ChiCheLo/TravelPlan_WebAPP</code> 管理版本，主分支為 <code>main</code></td><td>版本控管，之後可直接用 GitHub Pages 部署</td></tr>
+            <tr><td>D-002</td><td>2026-10-12</td><td>規劃過程、規格與開發紀錄統一寫在 <code>index.html</code></td><td>一份文件集中管理，用瀏覽器打開就能閱讀</td></tr>
+            <tr><td>D-003</td><td>2026-10-12</td><td>MVP 以「可互動的純前端」為標準，不做後端與帳號</td><td>先驗證核心體驗；資料存在本機即可</td></tr>
+            <tr><td>D-004</td><td>2026-10-12</td><td>使用原生 HTML / CSS / JS，無建置流程（取代原本 React + Vite 提案）</td><td>雙擊即可開啟、可直接部署成靜態網站；P0 規模不需要框架</td></tr>
+            <tr><td>D-005</td><td>2026-10-12</td><td>規劃文件移到 <code>docs/index.html</code>，根目錄 <code>index.html</code> 改為 App 入口</td><td>App 與 GitHub Pages 都需要根目錄的 index.html</td></tr>
+            <tr><td>D-006</td><td>2026-10-12</td><td>所有畫面設計依 ui-design-reference 規範</td><td>使用者要求；用成熟產品的模式避免「AI 感」設計</td></tr>
+            <tr><td>D-007</td><td>2026-10-12</td><td>修改旅程日期時，活動依「第幾天」保留（Day 1 仍是 Day 1）</td><td>行程整體往後挪是最常見的情況；縮短天數時以可復原 toast 提示被移除的活動</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section id="log">
+      <h2>10. 開發日誌</h2>
+      <div class="log-entry">
+        <div class="date">2026-10-12（MVP 第一版）</div>
+        <ul>
+          <li>確認 MVP 標準為可互動的純前端；技術改採原生 HTML / CSS / JS。</li>
+          <li>規劃文件由根目錄移到 <code>docs/index.html</code>。</li>
+          <li>完成 P0 功能：旅程新增／編輯／刪除、依日期自動產生每日分頁、活動新增／編輯／刪除／移到其他天、拖曳排序（支援觸控）、依時間排序、每日花費小計、localStorage 保存。</li>
+          <li>依 ui-design-reference 調整設計：建立 design tokens、Lucide SVG 圖示、底部面板（grabber + 滑入動畫）、刪除改為可復原 toast、空狀態加入「看範例行程」。</li>
+          <li>以 headless Chrome 在 390px 手機寬度截圖檢查畫面。</li>
+        </ul>
+      </div>
+      <div class="log-entry">
+        <div class="date">2026-10-12</div>
+        <ul>
+          <li>在本機資料夾執行 <code>git init</code>，主分支設為 <code>main</code>。</li>
+          <li>連接遠端 <code>origin</code> → https://github.com/ChiCheLo/TravelPlan_WebAPP.git（遠端目前為空）。</li>
+          <li>建立本規劃文件，寫入功能規格、技術架構、資料模型、畫面規劃的初稿。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 11 -->
+    <section id="questions">
+      <h2>11. 待確認問題</h2>
+      <p>以下問題確認後，會更新對應章節並記入決策紀錄。</p>
+      <ul class="checklist">
+        <li class="answered"><span class="q">MVP 的功能範圍是否同意第 3 節的 P0 列表？</span><span class="a">→ 以可互動的前端為標準，先做 P0（D-003）</span></li>
+        <li class="answered"><span class="q">技術選型是否採用 React + TypeScript + Vite？還是純 HTML/CSS/JS？</span><span class="a">→ 原生 HTML / CSS / JS（D-004）</span></li>
+        <li class="answered"><span class="q">是否需要帳號登入與雲端同步？</span><span class="a">→ 目前不需要，純前端（D-003）</span></li>
+        <li class="answered"><span class="q">規劃文件是否移到 <code>docs/index.html</code>？</span><span class="a">→ 已移動（D-005）</span></li>
+        <li>是否要做 AI 行程建議？若要，放在哪個階段？</li>
+        <li>部署平台：GitHub Pages、Vercel 或其他？</li>
+        <li>P1 功能（地圖、預算統計、匯出／匯入）的先後順序？</li>
+      </ul>
+    </section>
+  </main>
+</div>
+</body>
+</html>
