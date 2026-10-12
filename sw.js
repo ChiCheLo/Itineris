@@ -7,7 +7,7 @@
 //   Google 字型的 CSS：先用存起來的，背景再更新
 //   Firestore／登入 API、Firebase 的 /__/ 登入頁、非 GET：完全不碰
 
-const VERSION = 'v1';
+const VERSION = 'v2'; // 改了這裡，手機上的舊快取會在下次打開時清掉
 const CACHE = `itineris-${VERSION}`;
 const SHELL = [
   './',

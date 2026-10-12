@@ -230,6 +230,27 @@ describe('成員權限', () => {
   test('建立者可以刪除旅程', async () => {
     await assertSucceeds(deleteDoc(doc(as('alice'), 'trips/t1')));
   });
+  test('建立者可以標記刪除，也可以復原（拿掉標記）', async () => {
+    const db = as('alice');
+    await assertSucceeds(updateDoc(doc(db, 'trips/t1'), { deletedAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+    await assertSucceeds(updateDoc(doc(db, 'trips/t1'), { deletedAt: deleteField(), updatedAt: Timestamp.now() }));
+  });
+  test('旅伴不能標記刪除', async () => {
+    await bobJoins();
+    await assertFails(updateDoc(doc(as('bob'), 'trips/t1'), { deletedAt: Timestamp.now() }));
+  });
+  test('標記刪除不能順便改其他內容、刪除標記一定要是時間', async () => {
+    const db = as('alice');
+    await assertFails(updateDoc(doc(db, 'trips/t1'), { deletedAt: Timestamp.now(), title: '改名' }));
+    await assertFails(updateDoc(doc(db, 'trips/t1'), { deletedAt: 'yes' }));
+  });
+  test('已標記刪除的旅程不能再被加入', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'trips/t1'), { deletedAt: Timestamp.now() });
+    });
+    await assertFails(joinWith(as('bob'), 'bob', VALID_CODE));
+    await assertFails(updateDoc(doc(as('carol', { email: 'carol@gmail.com', email_verified: true }), 'trips/t1'), { members: arrayUnion('carol') }));
+  });
   test('旅伴可以退出', async () => {
     await bobJoins();
     await assertSucceeds(updateDoc(doc(as('bob'), 'trips/t1'), { members: arrayRemove('bob'), 'memberProfiles.bob': deleteField() }));

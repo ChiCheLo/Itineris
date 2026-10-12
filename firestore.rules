@@ -71,7 +71,7 @@ service cloud.firestore {
       return d.keys().hasOnly([
           'title', 'destination', 'startDate', 'endDate', 'currency',
           'ownerId', 'members', 'memberProfiles', 'invitedEmails',
-          'flights', 'packing', 'joinCode', 'createdAt', 'updatedAt'
+          'flights', 'packing', 'joinCode', 'deletedAt', 'createdAt', 'updatedAt'
         ])
         && text(d.title, 60)
         && text(d.destination, 60)
@@ -91,10 +91,22 @@ service cloud.firestore {
         || request.resource.data.memberProfiles.diff(resource.data.memberProfiles).affectedKeys().hasOnly([request.auth.uid]);
     }
 
-    // 成員一般編輯：行程、機票、物品清單、邀請名單都能改；建立者與成員名單不能從這裡改
+    // 成員一般編輯：行程、機票、物品清單、邀請名單都能改；建立者、成員名單、刪除標記不能從這裡改
     function memberEdit() {
       return request.auth.uid in resource.data.members
-        && !changedKeys().hasAny(['ownerId', 'members', 'createdAt', 'joinCode']);
+        && !changedKeys().hasAny(['ownerId', 'members', 'createdAt', 'joinCode', 'deletedAt']);
+    }
+
+    // 刪除旅程（D-071）：建立者先標記 deletedAt（所有人立刻看不到），可以再拿掉（復原）；
+    // 過了復原時間，建立者的 App 會把旅程與每天行程真的刪掉
+    function ownerSoftDelete() {
+      return request.auth.uid == resource.data.ownerId
+        && changedKeys().hasOnly(['deletedAt', 'updatedAt'])
+        && (!('deletedAt' in request.resource.data) || request.resource.data.deletedAt is timestamp);
+    }
+
+    function notDeleted() {
+      return !('deletedAt' in resource.data);
     }
 
     // 用 Gmail 邀請：Google 已驗證的 Email 在邀請名單裡（D-038）
@@ -111,6 +123,7 @@ service cloud.firestore {
 
     function joinByEmail() {
       return invitedByEmail(resource.data)
+        && notDeleted()
         && addsOnlySelf()
         && changedKeys().hasOnly(['members', 'memberProfiles', 'updatedAt']);
     }
@@ -118,7 +131,8 @@ service cloud.firestore {
     // 用邀請連結：寫入時附上邀請碼，邀請碼要屬於這趟旅程且還沒過期（D-038）
     function joinByInvite(tripId) {
       let invite = get(/databases/$(database)/documents/invites/$(request.resource.data.joinCode));
-      return addsOnlySelf()
+      return notDeleted()
+        && addsOnlySelf()
         && changedKeys().hasOnly(['members', 'memberProfiles', 'joinCode', 'updatedAt'])
         && invite.data.tripId == tripId
         && invite.data.expiresAt > request.time;
@@ -144,7 +158,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && validTrip(request.resource.data)
         && onlyOwnProfile()
-        && (memberEdit() || joinByEmail() || joinByInvite(tripId) || leave());
+        && (memberEdit() || ownerSoftDelete() || joinByEmail() || joinByInvite(tripId) || leave());
 
       // 只有建立者能刪除整趟旅程（D-039）；前端要先刪掉底下的 days，再刪旅程
       allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;

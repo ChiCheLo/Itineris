@@ -67,7 +67,9 @@ if (EMULATOR) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INVITE_DAYS = 7;
-const DELETE_DELAY = 6000; // 刪除旅程後先等「復原」的時間，過了才真的刪
+// 刪除旅程（D-071）：按下刪除就在旅程上寫 deletedAt（立刻存下、離線也會排隊），所有人馬上看不到；
+// 按「復原」就拿掉。過了這段時間，建立者的 App 下次讀到時才把旅程與每天行程真的刪掉
+const PURGE_AFTER = 60 * 1000;
 const TRIP_FIELDS = ['title', 'destination', 'startDate', 'endDate', 'currency', 'invitedEmails', 'flights', 'packing'];
 
 // 護照預設項目用固定 id，每次組出來都一樣
@@ -150,7 +152,8 @@ const cache = {
 };
 let rootUnsubs = [];
 const tripUnsubs = new Map();
-const pendingDeletes = new Map(); // tripId → 計時器
+const purging = new Set(); // 正在真的刪除的旅程，避免重複送出
+const isDeleted = (t) => !!t && 'deletedAt' in t; // 剛寫入、伺服器時間還沒回來時值是 null，一樣算已刪除
 let notify = () => {};
 let reportError = () => {};
 
@@ -211,17 +214,29 @@ function emit() {
   const trips = [];
   const personal = {};
   for (const id of cache.trips.keys()) {
-    if (pendingDeletes.has(id)) continue;
+    if (isDeleted(cache.trips.get(id))) continue;
     trips.push(composeTrip(id));
     const p = cache.personal.get(id) || {};
     personal[id] = { carried: obj(p.carried), shopping: objects(p.shopping) };
   }
   const uid = auth.currentUser?.uid;
   const invitations = [...cache.invitations.entries()]
-    .filter(([id, t]) => !cache.trips.has(id) && !(t.members || []).includes(uid))
+    .filter(([id, t]) => !cache.trips.has(id) && !isDeleted(t) && !(t.members || []).includes(uid))
     .map(([id, t]) => ({ id, title: t.title, destination: t.destination, startDate: t.startDate, endDate: t.endDate, ownerName: t.memberProfiles?.[t.ownerId]?.name || '' }));
   // 交給畫面的是複本：畫面直接修改物件時，不能連帶改到這裡的「伺服器版本」，否則比對不出差異、不會寫入
   notify(structuredClone({ trips, personal, invitations }));
+  purgeDeleted();
+}
+
+// 標記刪除超過 PURGE_AFTER 的旅程（自己是建立者），真的刪掉
+function purgeDeleted() {
+  const uid = auth.currentUser?.uid;
+  for (const [id, t] of cache.trips) {
+    if (!isDeleted(t) || t.ownerId !== uid || purging.has(id) || !cache.daysLoaded.has(id)) continue;
+    if (!(t.deletedAt instanceof Timestamp) || Date.now() - t.deletedAt.toMillis() < PURGE_AFTER) continue;
+    purging.add(id);
+    deleteTripNow(id);
+  }
 }
 
 function watchTrip(uid, tripId) {
@@ -362,13 +377,12 @@ export function saveAll(state) {
 
   for (const trip of state.trips) {
     seen.add(trip.id);
-    if (pendingDeletes.has(trip.id)) {
-      // 刪除後按了復原
-      clearTimeout(pendingDeletes.get(trip.id));
-      pendingDeletes.delete(trip.id);
-    }
     const tripRef = doc(db, 'trips', trip.id);
     const raw = cache.trips.get(trip.id);
+    if (isDeleted(raw)) {
+      // 刪除後按了復原：拿掉刪除標記
+      write(updateDoc(tripRef, { deletedAt: deleteField(), updatedAt: serverTimestamp() }));
+    }
     const fields = {
       title: trip.title,
       destination: trip.destination,
@@ -419,13 +433,10 @@ export function saveAll(state) {
     }
   }
 
-  // 畫面上不見的旅程＝刪除；等幾秒讓使用者可以按「復原」
-  for (const id of cache.trips.keys()) {
-    if (!seen.has(id) && !pendingDeletes.has(id) && cache.trips.get(id).ownerId === user.uid) {
-      pendingDeletes.set(id, setTimeout(() => {
-        pendingDeletes.delete(id);
-        deleteTripNow(id);
-      }, DELETE_DELAY));
+  // 畫面上不見的旅程＝刪除：馬上寫刪除標記（之後由 purgeDeleted 真的刪掉）
+  for (const [id, t] of cache.trips) {
+    if (!seen.has(id) && !isDeleted(t) && t.ownerId === user.uid) {
+      write(updateDoc(doc(db, 'trips', id), { deletedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
     }
   }
 }
@@ -439,15 +450,6 @@ function deleteTripNow(tripId) {
   batch.delete(doc(db, 'trips', tripId));
   write(batch.commit());
 }
-
-// 關掉頁面前，把等待中的刪除做完
-window.addEventListener('pagehide', () => {
-  for (const [id, timer] of pendingDeletes) {
-    clearTimeout(timer);
-    deleteTripNow(id);
-  }
-  pendingDeletes.clear();
-});
 
 // ---------- 旅伴 ----------
 
