@@ -466,7 +466,8 @@ type Flight = {
   gate: string;
   seat: string;
   bookingRef: string;     // 訂位代號
-  fastTrack: boolean;     // 入境可走快速通關（勾選）
+  transit?: "enter" | "airside";  // 抵達後轉機：需要入境／不用入境；沒有＝不是轉機（共用，D-065）
+  // 快速通關的勾選是個人的，存在 users/{uid}/personal/{tripId}.fastTrack（D-042）
 };
 
 type CheckItem = {
@@ -623,6 +624,16 @@ type Activity = {
             <tr><td>D-030</td><td>2026-10-12</td><td>行程上的花費顯示全額；算進預算時除以人數。旅程設定新增「人數」欄位，預設 2 人；購買清單不除</td><td>使用者決定（行程顯示全額、預算要除）；人數放在旅程設定，購買清單本來就是個人的</td></tr>
             <tr><td>D-031</td><td>2026-10-12</td><td>兩台手機都可以編輯行程</td><td>使用者決定</td></tr>
             <tr><td>D-032</td><td>2026-10-12</td><td>同步用 Google 登入</td><td>使用者決定</td></tr>
+            <tr><td>D-068</td><td>2026-10-13</td><td>安全標頭只套用到 App 自己的檔案（<code>/</code>、<code>index.html</code>、<code>docs</code>、<code>js</code>、<code>css</code>、<code>assets</code>），不套用到 Firebase 保留的 <code>/__/</code> 路徑；CSP 的 frame-src 加上 <code>itineris-de7ab.web.app</code></td><td>Firebase 的登入頁（<code>/__/auth/iframe</code>）要被 App 用 iframe 嵌入，若套用「禁止被嵌入」會讓登入失敗</td></tr>
+            <tr><td>D-067</td><td>2026-10-13</td><td>Firebase 登入網域（authDomain）改為 <code>itineris-de7ab.web.app</code>；Google OAuth 用戶端需加上授權重新導向 URI <code>https://itineris-de7ab.web.app/__/auth/handler</code></td><td>登入頁跟 App 同一個網域，iPhone 加到主畫面（PWA）後 Safari 才不會擋掉登入資訊（Firebase 官方建議做法）</td></tr>
+            <tr><td>D-066</td><td>2026-10-13</td><td>網站網址就用預設的 <code>https://itineris-de7ab.web.app</code></td><td>使用者決定。專案 ID 不能改；要去掉 -de7ab 只能另建自訂名稱的網站（名字要全球沒人用過，只能實際建立才知道）或購買自己的網域，之後若需要都還可以加上</td></tr>
+            <tr><td>D-065</td><td>2026-10-13</td><td>機票加上「抵達後轉機」：不是轉機（預設）／轉機，需要入境／轉機，不用入境。在機票表單選，登機證上快速通關的上方顯示「轉機・需要入境（要過海關、領行李後再轉機）」或「轉機・不用入境（留在管制區直接轉機）」；需要入境用訊號色。兩人共用，存在機票上</td><td>使用者提出：除了快速通關，轉機入不入境也要標註。要不要入境由航線與機票決定，同行的人通常相同，所以共用（快速通關看各自護照，所以是個人）。只接受這三種值，其他值一律當成不是轉機</td></tr>
+            <tr><td>D-064</td><td>2026-10-13</td><td>真的 Google 登入在 CSP 下驗證通過</td><td>使用者在套用安全標頭的本機伺服器（localhost:5050，連正式 Firebase）登入並成功建立範例行程，部署前資安檢查完成</td></tr>
+            <tr><td>D-063</td><td>2026-10-13</td><td>網站部署的排除清單加上 <code>**/.*/**</code></td><td>用 firebase-tools 部署時列檔案的同一個函式檢查，發現原本 <code>**/.*</code> 擋不住 <code>.git</code> 資料夾裡的檔案，整個版本紀錄會被放上網站。修正後只會上傳 App 需要的 8 個檔案</td></tr>
+            <tr><td>D-062</td><td>2026-10-13</td><td>網站加上安全標頭：CSP（只允許自己的網站、Firebase SDK、Google 登入、Google 字型；禁止內嵌程式碼、禁止被別的網站用 iframe 嵌入）、X-Content-Type-Options、X-Frame-Options、Referrer-Policy、Permissions-Policy</td><td>XSS 的第二道防線與防點擊劫持。<code>style-src</code> 允許 inline，因為進度條等用到 style 屬性（樣式注入風險遠低於程式碼注入）；<code>connect-src</code> 含 127.0.0.1 模擬器位址，讓本機測試也能套用同一份設定</td></tr>
+            <tr><td>D-061</td><td>2026-10-13</td><td>修正 XSS 與資料格式防呆：旅伴的顯示名稱、活動花費欄位、幣別、預算數值一律跳脫；讀進來的共用資料先整理成正確格式（清單一定是陣列、機票出發／抵達一定是物件、花費轉成數字）</td><td>部署前資安檢查：旅伴可以直接改共用資料或自己的顯示名稱，原本有兩處會在對方畫面執行（儲存型 XSS），格式錯亂的資料也可能讓畫面當掉</td></tr>
+            <tr><td>D-060</td><td>2026-10-13</td><td>手機 App 採用 PWA（加到主畫面），不做原生 App 上架；順序：部署前資安檢查 → 部署網站 → PWA → 部署後資安檢查</td><td>使用者與旅伴 iPhone、Android 都有。PWA 一份程式兩邊都能用、Google 登入正常、不用 Mac 與開發者帳號費用；原生殼（Capacitor）會遇到 Google 封鎖內嵌網頁登入、iPhone 版需要 Mac</td></tr>
+            <tr><td>D-059</td><td>2026-10-13</td><td><code>.gitignore</code> 列出所有不該公開的檔案：服務帳號金鑰、<code>.env</code>、Cloud Functions 機密、憑證與 App 簽章檔、Firebase 除錯紀錄、模擬器匯出資料、<code>node_modules</code>、系統與編輯器檔案。<code>js/firebase-config.js</code> 不列入</td><td>使用者要求。firebase-config.js 的 apiKey 是 Firebase 網頁用設定、網站上線後本來就公開，不是機密，網站也需要它；而且已 commit 的檔案加進 .gitignore 也不會從 GitHub 消失</td></tr>
             <tr><td>D-058</td><td>2026-10-13</td><td>行程頁頂列的「成員 N」改為成員圖示（Lucide users）＋人數；螢幕閱讀器讀「成員 N 人」</td><td>使用者要求</td></tr>
             <tr><td>D-057</td><td>2026-10-13</td><td>首頁顯示的旅程如果正在進行中（今天在旅程日期內），在旅程名稱上方標示「進行中的旅程」（訊號色＋圓點）；即將出發或已結束的旅程不標示</td><td>使用者要求</td></tr>
             <tr><td>D-056</td><td>2026-10-13</td><td>新增固定在所有頁面最上方的標題列：左邊 Logo（連到首頁），右邊頭像，點了打開帳號選單（名稱、Email、登出）。首頁內容不再重複放 Logo；旅程列表底部的帳號區移除；行程頁的頂列改為貼在標題列下方</td><td>使用者要求，讓登出更方便。登出放在選單裡而不是直接一顆按鈕，避免誤觸</td></tr>
@@ -693,6 +704,23 @@ type Activity = {
           <li>標題列（D-056）：Logo＋頭像帳號選單（點外面或按 Esc 關閉），任何頁面都能登出。測試時發現並修正：有 <code>hidden</code> 屬性但自己設定了 <code>display</code> 的元素不會真的藏起來 → 帳號選單關掉後仍顯示、活動表單的「誰要分攤」成員勾選區一直顯示；加上全域 <code>[hidden] { display: none !important; }</code>，並把測試改成檢查畫面上是否真的看不到。標題列測試 17 項、日期／時間 35 項、端對端 38 項，全部通過。</li>
           <li>首頁「進行中的旅程」標示（D-057）：測試即將出發的旅程不標示、今天出發的旅程有標示且用訊號色，截圖確認淺色與深色模式。</li>
           <li>行程頁「成員」按鈕改為成員圖示＋人數（D-058）；端對端測試改為檢查圖示、數字與「成員 3 人」的無障礙名稱，38 項全部通過。</li>
+          <li>使用者已 push（<code>2ee87d7 firebase+功能微調</code>），擔心有帳戶金鑰等不該公開的內容。檢查目前版本與所有歷史 commit：沒有服務帳號金鑰、私鑰、存取 token、密碼、<code>.env</code>；使用者的真實 Email 沒有出現；除錯紀錄檔與 <code>node_modules</code> 已被忽略、沒有推上去；Firebase CLI 登入憑證在使用者資料夾、不在專案中。唯一像金鑰的是 <code>js/firebase-config.js</code> 的 apiKey，屬於 Firebase 網頁用設定，公開是正常的（GitHub 若提醒偵測到 Google API Key，可標示為誤判）。建議第 8 步資安檢查時，在 Google Cloud 主控台把這個 key 限制為只能從 App 的網址使用。</li>
+          <li>重寫 <code>.gitignore</code>（D-059），用 <code>git check-ignore</code> 驗證 10 種機密檔名都會被擋下、App 需要的 6 個檔案不會被誤擋。依使用者要求，這次的修改不 push。</li>
+          <li>使用者確認 PWA 方向（D-060）與順序：部署前資安檢查 → 部署網站 → PWA → 部署後資安檢查。</li>
+          <li><strong>部署前資安檢查（第 8 步上線前的部分）</strong>：
+            <ul>
+              <li>XSS：逐一檢查 <code>app.js</code> 所有把資料放進畫面 HTML 的地方，找到 2 處儲存型 XSS（花費標籤上的分攤者名稱、活動表單的花費欄位）與幾處補強，全部修正（D-061）。測試方式：以管理員身分直接把惡意內容寫進模擬器資料庫（模擬旅伴竄改共用資料），走過行程、活動表單、成員、預算、準備清單、首頁，確認沒有任何內容被執行、沒有被塞進的 <code>&lt;img&gt;</code>、畫面沒有當掉。</li>
+              <li>安全標頭（D-062）：Firebase 的本機網站模擬器不會套用 <code>firebase.json</code> 的標頭與排除清單，所以另外寫一個本機模擬伺服器（用 firebase-tools 部署時的同一個函式列出檔案、套用同一份標頭）來驗證。確認 CSP 下 Firebase、字型、Logo 正常載入、沒有違規，且被塞進頁面的內嵌程式碼會被擋下。</li>
+              <li>排除清單：發現 <code>.git</code> 資料夾會被部署上網站，已修正（D-063）；確認 <code>package.json</code>、規則、測試、<code>.firebaserc</code>、原始 Logo、除錯紀錄、<code>node_modules</code> 都拿不到。</li>
+              <li>套件漏洞：網站實際使用的部分 0 個；開發工具（firebase-tools、測試工具）有 16 個（12 高、4 中），來源是只在 Node.js 伺服器端使用的 <code>@grpc/grpc-js</code>，以及開發工具處理檔案時的阻斷服務問題，不影響網站與使用者（網站的 Firebase SDK 由 gstatic 載入 12.19.0，不使用這些套件）。</li>
+              <li>測試（在套用真正 CSP 的模擬伺服器上）：資安 22 項、端對端 38 項、日期／時間 35 項、標題列 17 項、進行中標示 3 項，共 115 項全部通過；規則測試 34 項通過後，部署新版規則（每天行程改用 <code>getAfter</code>）到 <code>itineris-de7ab</code>。</li>
+              <li>真的 Google 登入（彈出視窗）在 CSP 下是否正常，模擬器測不到 → 使用者在 localhost:5050 實際登入並建立範例行程，驗證通過（D-064）。</li>
+            </ul>
+          </li>
+          <li>機票「抵達後轉機」標示（D-065）；範例行程的 NZ 78（台北→奧克蘭，接國內線）標為需要入境。測試 9 項：範例顯示與顏色、表單預選、改成不用入境／不是轉機、旅伴寫入奇怪的值（<code>__proto__</code>、HTML）不顯示也不當掉；在 CSP 下重跑端對端 38、日期／時間 35、資安 22 項，全部通過。</li>
+          <li>網址維持 <code>itineris-de7ab.web.app</code>（D-066）。</li>
+          <li><strong>第 6 步：部署網站</strong>。登入網域改為 web.app（D-067）、安全標頭不套用到 Firebase 登入頁（D-068），執行 <code>firebase deploy --only hosting</code>，上傳 8 個檔案，網址 https://itineris-de7ab.web.app 。線上檢查：App 頁面都有 CSP、X-Frame-Options 等標頭（Firebase 另外預設加上 HSTS）；<code>/__/auth/handler</code>、<code>/__/auth/iframe</code> 沒有套用；<code>package.json</code>、規則、<code>.firebaserc</code>、<code>.git</code>、測試、原始 Logo、除錯紀錄、<code>node_modules</code> 都是 404；用瀏覽器打開線上網站，登入畫面、Logo、字型正常，沒有 CSP 違規與程式錯誤。待使用者在 Google Cloud 加上重新導向 URI 後，用 iPhone 與 Android 實測登入與兩台手機同步。</li>
+          <li>使用者在 Google Cloud 加上重新導向 URI，用手機實測線上網站：測試可以。第 6 步完成。</li>
           <li>使用者將 GitHub repo 改名為 <code>ChiCheLo/Itineris</code>；本機 <code>origin</code> 改為 https://github.com/ChiCheLo/Itineris.git，確認可連線且與遠端同步。本機資料夾名稱仍是 <code>TravelPlan_WebAPP</code>。</li>
         </ul>
       </div>

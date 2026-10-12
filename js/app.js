@@ -16,6 +16,14 @@ import * as data from './data.js';
   };
   const CURRENCIES = ['TWD', 'NZD', 'JPY', 'KRW', 'USD', 'EUR', 'THB', 'HKD', 'CNY', 'SGD', 'GBP'];
   const CABINS = ['經濟艙', '豪華經濟艙', '商務艙', '頭等艙'];
+  // 抵達後是否轉機、轉機要不要入境（D-065，兩人共用，存在機票上）
+  const TRANSIT = {
+    none: { option: '不是轉機' },
+    enter: { option: '轉機，需要入境', label: '轉機・需要入境', note: '要過海關、領行李後再轉機' },
+    airside: { option: '轉機，不用入境', label: '轉機・不用入境', note: '留在管制區直接轉機' },
+  };
+  // 共用資料只認得這三種值，其他一律當成「不是轉機」
+  const transitOf = (f) => (Object.hasOwn(TRANSIT, f.transit) ? f.transit : 'none');
   const CURRENCY_NAMES = {
     TWD: '台幣', NZD: '紐幣', JPY: '日圓', KRW: '韓元', USD: '美元', EUR: '歐元',
     THB: '泰銖', HKD: '港幣', CNY: '人民幣', SGD: '新幣', GBP: '英鎊',
@@ -51,6 +59,7 @@ import * as data from './data.js';
     checks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
     bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
     search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    transfer: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
     trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
@@ -135,7 +144,8 @@ import * as data from './data.js';
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}（${WEEKDAYS[d.getUTCDay()]}）`;
   }
 
-  const fmtMoney = (n, currency) => `${currency} ${Number(n).toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`;
+  // 幣別來自共用的旅程資料，一律跳脫（資安檢查：XSS）
+  const fmtMoney = (n, currency) => `${esc(currency)} ${(Number(n) || 0).toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`;
 
   function fmtTime(a) {
     if (a.startTime && a.endTime) return `${a.startTime} – ${a.endTime}`;
@@ -158,13 +168,22 @@ import * as data from './data.js';
   const memberName = (trip, uid) => trip.memberProfiles?.[uid]?.name || '旅伴';
   const isOwner = (trip) => !trip.ownerId || trip.ownerId === me();
 
+  // 共用資料可能被旅伴改成奇怪的格式：花費一律轉成數字、分攤名單一定是陣列，格式不對就當成「全部平分」，
+  // 避免畫面因此當掉（資安檢查：別人不能藉由亂寫資料讓你的 App 打不開）
+  const costOf = (a) => {
+    const n = Number(a.cost);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const splitUids = (s) => (Array.isArray(s?.uids) ? s.uids.filter((u) => typeof u === 'string') : []);
+  const hasTime = (a) => typeof a.startTime === 'string' && a.startTime !== '';
+
   // 這筆花費算在我身上多少：全部平分／部分人分攤／個人開銷
   function myShare(a, trip) {
-    const cost = a.cost || 0;
+    const cost = costOf(a);
     if (!cost) return 0;
     const s = a.split;
     if (s?.type === 'self') return s.uid === me() ? cost : 0;
-    if (s?.type === 'some') return s.uids?.includes(me()) ? cost / s.uids.length : 0;
+    if (s?.type === 'some' && splitUids(s).length) return splitUids(s).includes(me()) ? cost / splitUids(s).length : 0;
     return cost / membersOf(trip).length;
   }
 
@@ -536,7 +555,7 @@ import * as data from './data.js';
   function activityNowNext(trip, key) {
     const items = [];
     trip.days.forEach((d, dayIdx) => {
-      const timed = d.activities.filter((a) => a.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const timed = d.activities.filter(hasTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
       timed.forEach((a, j) => {
         const start = `${d.date}T${a.startTime}`;
         const end = `${d.date}T${a.endTime || timed[j + 1]?.startTime || '24:00'}`;
@@ -744,7 +763,7 @@ import * as data from './data.js';
 
   // 預算用台幣 + 目的地貨幣
   const budgetCurrencies = (trip) => [...new Set(['TWD', trip.currency])];
-  const curName = (c) => `${CURRENCY_NAMES[c] || c} ${c}`;
+  const curName = (c) => esc(`${CURRENCY_NAMES[c] || c} ${c}`);
 
   function personalOf(trip) {
     if (!state.personal[trip.id]) state.personal[trip.id] = { carried: {}, shopping: [] };
@@ -764,7 +783,7 @@ import * as data from './data.js';
     let mine = 0;
     for (const d of trip.days) {
       for (const a of d.activities) {
-        total += a.cost || 0;
+        total += costOf(a);
         mine += myShare(a, trip);
       }
     }
@@ -798,7 +817,7 @@ import * as data from './data.js';
           </div>
           <div class="budget-row">
             <label class="budget-field"><span>帶了</span>
-              <input type="number" min="0" step="any" inputmode="decimal" data-carried="${c}" value="${carried || ''}" placeholder="0">
+              <input type="number" min="0" step="any" inputmode="decimal" data-carried="${esc(c)}" value="${esc(carried || '')}" placeholder="0">
             </label>
             <div class="budget-field"><span>花了</span><strong>${fmtMoney(spent, c)}</strong></div>
           </div>
@@ -839,7 +858,7 @@ import * as data from './data.js';
             <input name="price" type="number" min="0" step="any" inputmode="decimal" placeholder="價格" aria-label="價格">
             ${currencies.length > 1
               ? `<select name="currency" aria-label="幣別">${currencies.map((c) => `<option value="${c}"${c === trip.currency ? ' selected' : ''}>${c}</option>`).join('')}</select>`
-              : `<input type="hidden" name="currency" value="${currencies[0]}">`}
+              : `<input type="hidden" name="currency" value="${esc(currencies[0])}">`}
             <button class="btn secondary small" type="submit">${icon('plus', 16)}新增</button>
           </div>
           <p class="form-error" role="alert" hidden></p>
@@ -903,6 +922,9 @@ import * as data from './data.js';
               ${field('登機門', f.gate)}
               ${field('座位', f.seat)}
             </dl>
+            ${transitOf(f) !== 'none'
+              ? `<p class="bp-transit" data-transit="${transitOf(f)}">${icon('transfer', 16)}<span><strong>${TRANSIT[transitOf(f)].label}</strong>${TRANSIT[transitOf(f)].note}</span></p>`
+              : ''}
             <label class="bp-check">
               <input type="checkbox" data-flight-check="${esc(f.id)}"${f.fastTrack ? ' checked' : ''}>
               <span>入境可走快速通關</span>
@@ -970,7 +992,7 @@ import * as data from './data.js';
 
   function renderTrip(trip, dayIdx) {
     const day = trip.days[dayIdx];
-    const dayCost = day.activities.reduce((s, a) => s + (a.cost || 0), 0);
+    const dayCost = day.activities.reduce((s, a) => s + costOf(a), 0);
     document.title = `${trip.title} · Itineris`;
 
     app.innerHTML = `
@@ -1047,20 +1069,21 @@ import * as data from './data.js';
 
   // 有花費的活動加上標註；這些花費會算進「購買・預算」的花了多少
   const costTag = (a, trip) =>
-    a.cost ? `<span class="cost-tag">${icon('wallet', 14)}<span>花費 ${fmtMoney(a.cost, trip.currency)}${splitLabel(a, trip)}</span></span>` : '';
+    costOf(a) ? `<span class="cost-tag">${icon('wallet', 14)}<span>花費 ${fmtMoney(costOf(a), trip.currency)}${splitLabel(a, trip)}</span></span>` : '';
 
   // 行程上顯示全額，另外標出分攤方式（只有一個成員時不標）
+  // 旅伴的顯示名稱是對方自己可以改的資料，一定要跳脫（資安檢查：儲存型 XSS）
   function splitLabel(a, trip) {
     if (membersOf(trip).length < 2) return '';
-    if (a.split?.type === 'self') return ` · ${a.split.uid === me() ? '我' : memberName(trip, a.split.uid)}的個人開銷`;
-    if (a.split?.type === 'some') return ` · ${a.split.uids.length} 人分攤`;
+    if (a.split?.type === 'self') return ` · ${a.split.uid === me() ? '我' : esc(memberName(trip, a.split.uid))}的個人開銷`;
+    if (a.split?.type === 'some' && splitUids(a.split).length) return ` · ${splitUids(a.split).length} 人分攤`;
     return ` · ${membersOf(trip).length} 人平分`;
   }
 
   // 有開始時間的依時間排，沒有時間的保持原順序放在最後
   function sortByTime(list) {
-    const timed = list.filter((a) => a.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
-    return [...timed, ...list.filter((a) => !a.startTime)];
+    const timed = list.filter(hasTime).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return [...timed, ...list.filter((a) => !hasTime(a))];
   }
 
   // ---------- 查詢行程 ----------
@@ -1722,7 +1745,7 @@ import * as data from './data.js';
       </label>
       <div class="field-row">
         <label class="field"><span>花費（${esc(trip.currency)}）</span>
-          <input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${a.cost ?? ''}" placeholder="0">
+          <input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(a.cost ?? '')}" placeholder="0">
         </label>
         <label class="field"><span>日期</span>
           <select name="day">
@@ -1870,6 +1893,11 @@ import * as data from './data.js';
         pickerTrigger('date', 'arriveDate', '抵達日期', f.arriveDate, 'data-min="departDate"')
         + pickerTrigger('time', 'arriveTime', '抵達時間', f.arriveTime))}
       <p class="field-hint">時間請填機票上的當地時間。</p>
+      <fieldset class="chips">
+        <legend>抵達後轉機</legend>
+        ${Object.entries(TRANSIT).map(([key, t]) => `
+          <label class="chip"><input type="radio" name="transit" value="${key}"${key === transitOf(f) ? ' checked' : ''}><span>${t.option}</span></label>`).join('')}
+      </fieldset>
       ${pickerGroup(
         pickerTrigger('time', 'boardingTime', '登機時間', f.boardingTime)
         + `<label class="field"><span>艙等</span>
@@ -1904,6 +1932,7 @@ import * as data from './data.js';
           gate: get('gate'),
           seat: get('seat').toUpperCase(),
           bookingRef: get('bookingRef').toUpperCase(),
+          transit: transitOf({ transit: fd.get('transit') }) !== 'none' ? fd.get('transit') : undefined,
           fastTrack: flight?.fastTrack || false,
         };
         if (!next.flightNo) return '請填寫航班編號';
@@ -2014,7 +2043,7 @@ import * as data from './data.js';
       days: days.map((activities, i) => ({ date: day(i), activities })),
       flights: [
         flight('紐西蘭航空', 'NZ 78', TPE, AKL, day(0), '23:10', day(1), '15:20',
-          { boardingTime: '22:30', terminal: 'T1', gate: 'B5', seat: '42A', bookingRef: 'X7K2QP' }),
+          { boardingTime: '22:30', terminal: 'T1', gate: 'B5', seat: '42A', bookingRef: 'X7K2QP', transit: 'enter' }),
         flight('紐西蘭航空', 'NZ 615', AKL, { code: 'ZQN', city: '皇后鎮' }, day(1), '17:00', day(1), '18:50',
           { boardingTime: '16:30', terminal: 'D', seat: '12C', bookingRef: 'X7K2QP' }),
         flight('紐西蘭航空', 'NZ 506', { code: 'CHC', city: '基督城' }, AKL, day(6), '07:00', day(6), '08:20',
@@ -2159,7 +2188,7 @@ import * as data from './data.js';
     item.done = box.checked;
     touch(t);
     render();
-    app.querySelector(`[data-check="${box.dataset.check}"][data-id="${box.dataset.id}"]`)?.focus();
+    app.querySelector(`[data-check="${CSS.escape(box.dataset.check)}"][data-id="${CSS.escape(box.dataset.id)}"]`)?.focus();
   });
 
   // 查詢行程：邊打邊找，只更新結果區，輸入框不會失去焦點
@@ -2205,7 +2234,7 @@ import * as data from './data.js';
     item.done = box.checked;
     save();
     render();
-    app.querySelector(`[data-buy="${box.dataset.buy}"]`)?.focus();
+    app.querySelector(`[data-buy="${CSS.escape(box.dataset.buy)}"]`)?.focus();
   });
 
   // 購買清單：新增

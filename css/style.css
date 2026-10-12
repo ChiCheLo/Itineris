@@ -745,6 +745,22 @@ svg.icon { flex: none; display: block; }
 .bp-field.wide { grid-column: 1 / -1; }
 .bp-field dt { font-size: var(--fs-12); color: var(--text-muted); }
 .bp-field dd { margin: 0; font-size: var(--fs-16); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+/* 轉機標示：需要入境用訊號色提醒（要過海關、領行李），不用入境用一般文字色（D-065） */
+.bp-transit {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 20px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-14);
+  color: var(--text-muted);
+}
+.bp-transit .icon { margin-top: 2px; }
+.bp-transit span { display: grid; }
+.bp-transit strong { font-size: var(--fs-16); color: var(--text); }
+.bp-transit[data-transit="enter"] .icon,
+.bp-transit[data-transit="enter"] strong { color: var(--signal); }
 /* 快速通關：勾選，跟準備清單同一種核取方塊 */
 .bp-check {
   display: flex;

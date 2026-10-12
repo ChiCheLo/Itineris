@@ -172,6 +172,12 @@ export function stopWatching() {
   resetCache();
 }
 
+// 共用資料可能被旅伴寫成奇怪的格式（規則只檢查到清單長度）：清單一定是陣列、裡面只留物件，
+// 機票的出發／抵達一定是物件，避免畫面因此當掉（資安檢查）
+const objects = (v) => (Array.isArray(v) ? v.filter((o) => o && typeof o === 'object' && !Array.isArray(o)) : []);
+const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+const strings = (v) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string') : []);
+
 function composeTrip(id) {
   const t = cache.trips.get(id);
   const days = cache.days.get(id) || new Map();
@@ -184,12 +190,16 @@ function composeTrip(id) {
     endDate: t.endDate,
     currency: t.currency,
     ownerId: t.ownerId,
-    members: t.members || [],
-    memberProfiles: t.memberProfiles || {},
-    invitedEmails: t.invitedEmails || [],
-    days: dateRange(t.startDate, t.endDate).map((date) => ({ date, activities: days.get(date)?.activities || [] })),
-    flights: (t.flights || []).map((f) => ({ ...f, fastTrack: !!p.fastTrack?.[f.id] })),
-    prep: { packing: t.packing || [], passport: p.passport || [DEFAULT_PASSPORT], visa: p.visa || [] },
+    members: strings(t.members),
+    memberProfiles: obj(t.memberProfiles),
+    invitedEmails: strings(t.invitedEmails),
+    days: dateRange(t.startDate, t.endDate).map((date) => ({ date, activities: objects(days.get(date)?.activities) })),
+    flights: objects(t.flights).map((f) => ({ ...f, from: obj(f.from), to: obj(f.to), fastTrack: !!obj(p.fastTrack)[f.id] })),
+    prep: {
+      packing: objects(t.packing),
+      passport: p.passport ? objects(p.passport) : [DEFAULT_PASSPORT],
+      visa: objects(p.visa),
+    },
   };
 }
 
@@ -204,7 +214,7 @@ function emit() {
     if (pendingDeletes.has(id)) continue;
     trips.push(composeTrip(id));
     const p = cache.personal.get(id) || {};
-    personal[id] = { carried: p.carried || {}, shopping: p.shopping || [] };
+    personal[id] = { carried: obj(p.carried), shopping: objects(p.shopping) };
   }
   const uid = auth.currentUser?.uid;
   const invitations = [...cache.invitations.entries()]

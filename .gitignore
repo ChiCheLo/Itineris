@@ -1,7 +1,61 @@
-# Node / Firebase CLI
-node_modules/
+# Itineris：不該放上 GitHub 的檔案
+#
+# 注意：.gitignore 只對「還沒被 git 追蹤」的檔案有效。已經 commit 過的檔案，
+# 加進這裡也不會從 GitHub 消失（歷史紀錄裡還在），要另外處理。
+#
+# 為什麼 js/firebase-config.js 不在這裡：它是 Firebase 的網頁用設定（apiKey 等），
+# 網站上線後任何人都看得到，不是機密；資料安全靠 firestore.rules。網站也需要它才能運作。
+
+# ---------- 金鑰與機密（絕對不能公開） ----------
+# Firebase／Google Cloud 服務帳號金鑰（可以繞過安全規則存取整個資料庫）
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+credentials.json
+client_secret*.json
+# 環境變數（常放 API 金鑰、密碼）；範例檔 .env.example 可以公開
+.env
+.env.*
+!.env.example
+# Cloud Functions 的設定與機密（之後如果用到）
+.runtimeconfig.json
+functions/.env*
+functions/.secret.local
+.secret.local
+# 憑證、私鑰、App 簽章檔（之後包成手機 App 時會用到）
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.keystore
+*.jks
+*.mobileprovision
+
+# ---------- Firebase CLI 與模擬器 ----------
 .firebase/
-*-debug.log
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+*-debug.log
+# 模擬器匯出的資料（可能有測試帳號與資料）
+emulator-data/
+firebase-export-*/
+
+# ---------- Node ----------
+node_modules/
+npm-debug.log*
+.npm/
+
+# ---------- 測試輸出 ----------
+coverage/
+test-results/
+
+# ---------- 系統與編輯器自動產生 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
