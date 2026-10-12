@@ -624,6 +624,8 @@ type Activity = {
             <tr><td>D-030</td><td>2026-10-12</td><td>行程上的花費顯示全額；算進預算時除以人數。旅程設定新增「人數」欄位，預設 2 人；購買清單不除</td><td>使用者決定（行程顯示全額、預算要除）；人數放在旅程設定，購買清單本來就是個人的</td></tr>
             <tr><td>D-031</td><td>2026-10-12</td><td>兩台手機都可以編輯行程</td><td>使用者決定</td></tr>
             <tr><td>D-032</td><td>2026-10-12</td><td>同步用 Google 登入</td><td>使用者決定</td></tr>
+            <tr><td>D-070</td><td>2026-10-13</td><td>App 圖示：用 LOGO.png 裡的藍色螺旋槳飛機（含虛線航跡與地標，不放 Itineris 字），紙感暖白底 #f6f4ef；做 192、512、maskable 512（內容縮到 60%，避免 Android 裁切）、iPhone 180、瀏覽器分頁 32</td><td>使用者選擇。主畫面圖示很小，字會看不清楚，名稱本來就會顯示在圖示下方</td></tr>
+            <tr><td>D-069</td><td>2026-10-13</td><td>PWA：<code>manifest.webmanifest</code>（名稱、全螢幕、圖示）＋ <code>sw.js</code>（App 檔案先抓網路、沒網路用存起來的；Firebase SDK 與字型直接用存起來的；不碰 Firestore、登入 API 與 <code>/__/</code>）；首頁顯示安裝提示：iPhone 教學「分享 → 加入主畫面」、Android／電腦版 Chrome 顯示「安裝」按鈕，已安裝或按「不用了」後不再出現；<code>sw.js</code> 設定 no-cache 且不套用頁面 CSP</td><td>第 7 步（D-060）。App 檔案用「先抓網路」讓部署新版後馬上生效；資料的離線由 Firestore 離線快取負責</td></tr>
             <tr><td>D-068</td><td>2026-10-13</td><td>安全標頭只套用到 App 自己的檔案（<code>/</code>、<code>index.html</code>、<code>docs</code>、<code>js</code>、<code>css</code>、<code>assets</code>），不套用到 Firebase 保留的 <code>/__/</code> 路徑；CSP 的 frame-src 加上 <code>itineris-de7ab.web.app</code></td><td>Firebase 的登入頁（<code>/__/auth/iframe</code>）要被 App 用 iframe 嵌入，若套用「禁止被嵌入」會讓登入失敗</td></tr>
             <tr><td>D-067</td><td>2026-10-13</td><td>Firebase 登入網域（authDomain）改為 <code>itineris-de7ab.web.app</code>；Google OAuth 用戶端需加上授權重新導向 URI <code>https://itineris-de7ab.web.app/__/auth/handler</code></td><td>登入頁跟 App 同一個網域，iPhone 加到主畫面（PWA）後 Safari 才不會擋掉登入資訊（Firebase 官方建議做法）</td></tr>
             <tr><td>D-066</td><td>2026-10-13</td><td>網站網址就用預設的 <code>https://itineris-de7ab.web.app</code></td><td>使用者決定。專案 ID 不能改；要去掉 -de7ab 只能另建自訂名稱的網站（名字要全球沒人用過，只能實際建立才知道）或購買自己的網域，之後若需要都還可以加上</td></tr>
@@ -721,6 +723,7 @@ type Activity = {
           <li>網址維持 <code>itineris-de7ab.web.app</code>（D-066）。</li>
           <li><strong>第 6 步：部署網站</strong>。登入網域改為 web.app（D-067）、安全標頭不套用到 Firebase 登入頁（D-068），執行 <code>firebase deploy --only hosting</code>，上傳 8 個檔案，網址 https://itineris-de7ab.web.app 。線上檢查：App 頁面都有 CSP、X-Frame-Options 等標頭（Firebase 另外預設加上 HSTS）；<code>/__/auth/handler</code>、<code>/__/auth/iframe</code> 沒有套用；<code>package.json</code>、規則、<code>.firebaserc</code>、<code>.git</code>、測試、原始 Logo、除錯紀錄、<code>node_modules</code> 都是 404；用瀏覽器打開線上網站，登入畫面、Logo、字型正常，沒有 CSP 違規與程式錯誤。待使用者在 Google Cloud 加上重新導向 URI 後，用 iPhone 與 Android 實測登入與兩台手機同步。</li>
           <li>使用者在 Google Cloud 加上重新導向 URI，用手機實測線上網站：測試可以。第 6 步完成。</li>
+          <li><strong>第 7 步：PWA</strong>（D-069、D-070）。新增 <code>manifest.webmanifest</code>、<code>sw.js</code>、<code>assets/icons/</code>（5 個圖示），<code>index.html</code> 加上 manifest、iPhone 圖示與全螢幕設定，首頁加上安裝提示；部署檔案由 8 個變成 15 個。測試（在套用安全標頭的本機伺服器）：PWA 15 項（manifest 無錯誤、圖示都拿得到、Service Worker 啟用並存好 15 個檔案含 Firebase SDK、Chrome 判斷可安裝、<strong>斷網後重新打開仍可使用</strong>、沒有 CSP 違規）；安裝提示 5 項（iPhone 顯示教學、按不用了後消失且重開不再出現、已從主畫面開啟時不顯示、Android／電腦版 Chrome 顯示安裝按鈕）；端對端 38、日期／時間 35、資安 22、標題列 17、轉機 9 項重跑全部通過。尚未部署。</li>
           <li>使用者將 GitHub repo 改名為 <code>ChiCheLo/Itineris</code>；本機 <code>origin</code> 改為 https://github.com/ChiCheLo/Itineris.git，確認可連線且與遠端同步。本機資料夾名稱仍是 <code>TravelPlan_WebAPP</code>。</li>
         </ul>
       </div>

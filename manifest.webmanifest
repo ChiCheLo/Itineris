@@ -1,0 +1,17 @@
+{
+  "name": "Itineris 行程規劃",
+  "short_name": "Itineris",
+  "description": "機票、每日行程、準備清單與預算放在同一個地方，兩支手機同步",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

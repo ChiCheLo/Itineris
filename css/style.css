@@ -510,6 +510,24 @@ svg.icon { flex: none; display: block; }
 .invite-label { font-size: var(--fs-12); font-weight: 700; color: var(--signal); }
 .invite-text strong { font-family: var(--font-serif); font-size: var(--fs-18); font-weight: 600; }
 
+/* ---------- 加到主畫面提示（PWA，D-069） ---------- */
+.install-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: start;
+  padding: 16px;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.install-card img { border-radius: 11px; box-shadow: 0 0 0 1px var(--border); }
+.install-text { display: grid; gap: 4px; }
+.install-text strong { font-family: var(--font-serif); font-size: var(--fs-18); font-weight: 600; }
+.install-text span { font-size: var(--fs-14); color: var(--text-muted); }
+.install-text .icon { display: inline-block; vertical-align: -3px; color: var(--text); }
+.install-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+
 /* ---------- 帳號 ---------- */
 .account-info { display: grid; min-width: 0; }
 .account-name { font-weight: 600; }

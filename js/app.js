@@ -416,6 +416,60 @@ import * as data from './data.js';
     if (route.name === 'join' && findTrip(route.id)) location.replace(tripHref(findTrip(route.id)));
   }
 
+  // ---------- PWA：Service Worker 與「加到主畫面」提示（第 7 步，D-069） ----------
+
+  // 模擬器模式（自動測試）不註冊，避免快取干擾測試
+  if ('serviceWorker' in navigator && !data.EMULATOR) {
+    navigator.serviceWorker.register('./sw.js').catch(() => { /* 不支援或私密瀏覽：照常當網頁用 */ });
+  }
+
+  const INSTALL_KEY = 'itineris.installHint'; // 'installed'／'dismissed'：之後不再顯示
+  let installPrompt = null; // Android／電腦版 Chrome 提供的安裝視窗
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS 會假裝成 Mac
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // 改用我們自己的按鈕
+    installPrompt = e;
+    if (parseRoute().name === 'home') render();
+  });
+  window.addEventListener('appinstalled', () => {
+    installPrompt = null;
+    writeLocal(INSTALL_KEY, 'installed');
+    render();
+  });
+
+  const SHARE_ICON = '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="分享"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>';
+
+  function installHint() {
+    if (isStandalone() || readLocal(INSTALL_KEY)) return '';
+    const dismiss = '<button class="btn ghost small" type="button" data-action="dismiss-install">不用了</button>';
+    if (installPrompt) {
+      return `
+        <div class="install-card">
+          <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
+          <div class="install-text">
+            <strong>安裝 Itineris</strong>
+            <span>加到主畫面，像 App 一樣全螢幕開啟，沒網路也能看行程。</span>
+          </div>
+          <div class="install-actions">${dismiss}<button class="btn primary small" type="button" data-action="install-app">安裝</button></div>
+        </div>`;
+    }
+    if (isIOS()) {
+      return `
+        <div class="install-card">
+          <img src="assets/icons/icon-192.png" alt="" width="48" height="48">
+          <div class="install-text">
+            <strong>把 Itineris 加到主畫面</strong>
+            <span>點瀏覽器的分享按鈕 ${SHARE_ICON}，往下找「加入主畫面」。之後從主畫面打開就像 App 一樣，沒網路也能看行程。</span>
+          </div>
+          <div class="install-actions">${dismiss}</div>
+        </div>`;
+    }
+    return '';
+  }
+
   // ---------- Gmail 邀請：還沒加入的旅程 ----------
 
   function invitationBanner() {
@@ -583,6 +637,7 @@ import * as data from './data.js';
         <div class="home">
           ${homeTop()}
           ${invitationBanner()}
+          ${installHint()}
           ${clock}
           <div class="empty home-empty">
             <strong>還沒有旅程</strong>
@@ -623,6 +678,7 @@ import * as data from './data.js';
       <div class="home">
         ${homeTop()}
         ${invitationBanner()}
+        ${installHint()}
         ${clock}
         <a class="home-trip" href="${tripHref(trip, Math.max(todayIdx, 0))}">
           <span class="home-trip-text">
@@ -2097,6 +2153,19 @@ import * as data from './data.js';
       }
       case 'members':
         openMembers(trip);
+        break;
+      case 'install-app':
+        if (!installPrompt) break;
+        installPrompt.prompt();
+        installPrompt.userChoice.then((choice) => {
+          if (choice.outcome === 'accepted') writeLocal(INSTALL_KEY, 'installed');
+          installPrompt = null;
+          render();
+        });
+        break;
+      case 'dismiss-install':
+        writeLocal(INSTALL_KEY, 'dismissed');
+        render();
         break;
       case 'new-trip':
         openTripForm(null);
