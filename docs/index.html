@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TravelPlan 規劃文件</title>
+<title>Itineris 規劃文件</title>
 <meta name="description" content="行程規劃 Web APP 的計劃過程、規格與開發紀錄">
 <style>
   :root {
@@ -176,10 +176,10 @@
 
   <main>
     <header class="page">
-      <h1>TravelPlan 行程規劃 Web APP</h1>
+      <h1>Itineris 行程規劃 Web APP</h1>
       <p>這份文件記錄專案的計劃過程、功能規格、技術決策與開發紀錄，會隨開發進度持續更新。</p>
       <div class="meta">
-        <span>Repo：<a href="https://github.com/ChiCheLo/TravelPlan_WebAPP">ChiCheLo/TravelPlan_WebAPP</a></span>
+        <span>Repo：<a href="https://github.com/ChiCheLo/Itineris">ChiCheLo/Itineris</a></span>
         <span>建立日期：2026-10-12</span>
         <span>目前階段：<span class="badge doing">依新規格開發中</span></span>
         <span><a href="../index.html">開啟 App</a></span>
@@ -347,11 +347,19 @@
       <p>若之後功能變多（共編、AI 建議、多頁狀態複雜），再評估改用 React + TypeScript + Vite。</p>
       <h3>目錄結構</h3>
 <pre><code>TravelPlan_WebAPP/
+├── firebase.json      # Firebase CLI 設定（規則、模擬器）
+├── .firebaserc        # Firebase 專案 ID：itineris-de7ab
+├── firestore.rules    # Firestore 安全規則（後端權限檢查）
+├── package.json       # 開發用工具：npm run test:rules（規則測試）、npm run deploy:rules
+├── tests/
+│   └── firestore.rules.test.js  # 安全規則自動測試（模擬器）
 ├── index.html         # App 入口
 ├── css/
 │   └── style.css      # design tokens 與所有樣式
 ├── js/
-│   └── app.js         # 狀態、路由、畫面渲染、表單、拖曳排序
+│   ├── app.js         # 畫面：路由、渲染、表單、拖曳排序（ES module）
+│   ├── data.js        # 資料存取層：Google 登入、Firestore 即時監聽與差異寫入、邀請
+│   └── firebase-config.js  # Firebase 專案設定
 └── docs/
     └── index.html     # 本規劃文件</code></pre>
       <h3>app.js 結構</h3>
@@ -368,8 +376,60 @@
 
     <!-- 6 -->
     <section id="data">
-      <h2>6. 資料模型（草案）</h2>
-      <div class="note">以下是目前程式使用的模型，已加入機票（Flight）。證件、物品清單、預算等資料做到該功能時再補上。</div>
+      <h2>6. 資料模型</h2>
+
+      <h3>正式版：Firestore 資料庫設計（草案，2026-10-13）</h3>
+      <div class="note">依 D-034～D-040。前端只透過一個資料存取模組（預定 <code>js/data.js</code>）讀寫 Firestore，畫面程式不直接碰資料庫，這就是前後端的分界。權限一律由 Firestore 安全規則在伺服器端檢查，不靠前端判斷。全程使用免費方案（Spark），不使用需要綁卡的 Cloud Functions（D-040）。</div>
+<pre><code>users/{uid}                         // Google 帳號基本資料（由 Google 提供）
+  displayName, email, photoURL, createdAt
+
+users/{uid}/personal/{tripId}       // 個人資料：只有本人能讀寫，旅伴看不到
+  carried:  { TWD: number, NZD: number }   // 預算：帶了多少（D-025）
+  shopping: ShopItem[]                     // 購買清單
+  passport: CheckItem[]                    // 準備清單：護照（各自一份，D-037）
+  visa:     CheckItem[]                    // 準備清單：簽證與入境資料（各自一份）
+  fastTrack: { [flightId]: boolean }       // 機票上的快速通關勾選（各自勾，D-042）
+
+trips/{tripId}                      // 共用：成員都能讀寫
+  title, destination, startDate, endDate, currency
+  ownerId                          // 建立者，只有他能刪除整趟旅程（D-039）
+  members: uid[]                    // 成員名單
+  memberProfiles: { [uid]: { name, photoURL } }
+  invitedEmails: string[]           // 用 Gmail 邀請的旅伴（D-038）
+  flights: Flight[]
+  packing: CheckItem[]              // 準備清單：攜帶物品（共用，D-037）
+  createdAt, updatedAt
+
+trips/{tripId}/days/{YYYY-MM-DD}    // 每天的行程分開存：兩人同時改不同天不會互相覆蓋
+  date, activities: Activity[], updatedAt
+
+Activity（在原型的欄位之外新增）
+  split: { type: "all" }                     // 預設：除以全部成員人數（D-043）
+       | { type: "some", uids: string[] }    // 部分人分攤：只除以這幾個人，也只算進他們的預算
+       | { type: "self", uid: string }       // 個人開銷：全額算進這個人的預算
+
+invites/{code}                      // 邀請連結（D-038）
+  tripId, createdBy, expiresAt      // 有期限，例如 7 天</code></pre>
+
+      <h3>安全規則（Firestore Security Rules）重點</h3>
+      <ul>
+        <li>沒登入什麼都不能讀寫。</li>
+        <li><code>users/{uid}</code> 與底下的 <code>personal</code>：只有 <code>uid</code> 本人能讀寫。</li>
+        <li><code>trips/{tripId}</code> 與 <code>days</code>：只有 <code>members</code> 裡的人能讀寫；只有 <code>ownerId</code> 能刪除旅程、改 <code>ownerId</code>。</li>
+        <li>加入旅程（邀請連結）：只能把「自己」加進 <code>members</code>，而且寫入時要附上有效、未過期、屬於這趟旅程的邀請碼。</li>
+        <li>加入旅程（Gmail 邀請）：只有 Google 帳號 Email 已驗證、且在 <code>invitedEmails</code> 裡的本人，才能把自己加進 <code>members</code>。</li>
+        <li>欄位型別與長度檢查（例如標題最多 60 字），避免塞入異常資料。</li>
+      </ul>
+
+      <h3>其他</h3>
+      <ul>
+        <li>離線：開啟 Firestore 離線快取，沒網路時仍可查看與修改，連線後自動同步。</li>
+        <li>舊資料：第一次登入時，把瀏覽器 localStorage 裡的旅程、預算、購買清單自動上傳到帳號（D-041）。</li>
+        <li>同時編輯：同一天的同一個活動，兩人在同一刻修改時，後存的會覆蓋先存的。</li>
+      </ul>
+
+      <h3>原型（目前程式）使用的模型</h3>
+      <div class="note">以下是原型存在 localStorage 的模型，正式版會依上面的設計搬到 Firestore。</div>
 <pre><code>type Trip = {
   id: string;
   title: string;          // 例：東京五日遊
@@ -563,6 +623,31 @@ type Activity = {
             <tr><td>D-030</td><td>2026-10-12</td><td>行程上的花費顯示全額；算進預算時除以人數。旅程設定新增「人數」欄位，預設 2 人；購買清單不除</td><td>使用者決定（行程顯示全額、預算要除）；人數放在旅程設定，購買清單本來就是個人的</td></tr>
             <tr><td>D-031</td><td>2026-10-12</td><td>兩台手機都可以編輯行程</td><td>使用者決定</td></tr>
             <tr><td>D-032</td><td>2026-10-12</td><td>同步用 Google 登入</td><td>使用者決定</td></tr>
+            <tr><td>D-058</td><td>2026-10-13</td><td>行程頁頂列的「成員 N」改為成員圖示（Lucide users）＋人數；螢幕閱讀器讀「成員 N 人」</td><td>使用者要求</td></tr>
+            <tr><td>D-057</td><td>2026-10-13</td><td>首頁顯示的旅程如果正在進行中（今天在旅程日期內），在旅程名稱上方標示「進行中的旅程」（訊號色＋圓點）；即將出發或已結束的旅程不標示</td><td>使用者要求</td></tr>
+            <tr><td>D-056</td><td>2026-10-13</td><td>新增固定在所有頁面最上方的標題列：左邊 Logo（連到首頁），右邊頭像，點了打開帳號選單（名稱、Email、登出）。首頁內容不再重複放 Logo；旅程列表底部的帳號區移除；行程頁的頂列改為貼在標題列下方</td><td>使用者要求，讓登出更方便。登出放在選單裡而不是直接一顆按鈕，避免誤觸</td></tr>
+            <tr><td>D-055</td><td>2026-10-13</td><td>機票的登機時間、活動的開始／結束時間也改用「時」「分」捲動清單（1 分鐘刻度），跟出發時間一樣；App 裡已沒有瀏覽器內建的日期／時間欄位</td><td>使用者要求</td></tr>
+            <tr><td>D-054</td><td>2026-10-13</td><td>日曆／時間展開動畫由 280ms 放慢，先改 420ms，再依使用者指定改為 800ms（內容淡入 600ms）；收起：日曆與時間清單都是 350ms（內容淡出 250ms）</td><td>使用者要求展開再慢一點並指定 0.8 秒；收起試用 0.8 秒後覺得太久，先只把時間清單改快，最後決定日期也改成 0.35 秒</td></tr>
+            <tr><td>D-053</td><td>2026-10-13</td><td>底部面板關閉時往下滑出去、遮罩淡出（桌機版縮小淡出），對應打開時往上滑進來；Esc 與 Android 返回鍵也走同一個動畫</td><td>使用者回饋：打開的上滑效果很好，但關閉時不順暢，希望一樣用下滑關閉</td></tr>
+            <tr><td>D-052</td><td>2026-10-13</td><td>日曆／時間展開區改為平順展開與收起：高度用 grid 列高轉場長出來，內容淡入並微微滑下；展開 280ms 先快後慢、收起 200ms 先慢後快；換月份左右滑動；同組切換內容時淡入；開啟「減少動態效果」時不播動畫</td><td>使用者回饋：跳出與關閉時像突然冒出來。依 ui-ux-pro-max：出現減速、離開加速、離開比出現快、優先用 transform／opacity、尊重減少動態效果</td></tr>
+            <tr><td>D-051</td><td>2026-10-13</td><td>旅程的出發日／回程日改用日曆選取（同一個日曆選區間）；機票的出發／抵達日期用日曆，出發／抵達時間用「時」「分」兩欄捲動清單，1 分鐘為刻度。都在欄位下方展開，不另外疊彈窗</td><td>使用者要求（時間以 1 分鐘為刻度）；60 個分鐘排成格子會小於 44px 點擊範圍，所以用 44px 一格的捲動清單；表單已在底部面板中，展開式比再疊一層彈窗清楚</td></tr>
+            <tr><td>D-050</td><td>2026-10-13</td><td>使用者提供的 <code>LOGO字.png</code> 放在首頁左上角與登入頁的 Logo 位置；另做網頁用尺寸（600px 寬）與深色模式的淺藍版，放在 <code>assets/</code>；原始 Logo 檔不放上網站</td><td>使用者要求；原圖 289 KB、深藍色在深色背景上對比不足</td></tr>
+            <tr><td>D-049</td><td>2026-10-13</td><td>網站上線時公開 App 與規劃文件（<code>/docs/</code>）</td><td>使用者決定</td></tr>
+            <tr><td>D-048</td><td>2026-10-13</td><td>暫不做刪除帳號功能</td><td>使用者決定。若之後要做：用批次刪除（一批最多 500 筆，通常 1～2 次請求），並要先決定「自己建立、旅伴也在用的旅程」要轉給旅伴還是一起刪除</td></tr>
+            <tr><td>D-047</td><td>2026-10-13</td><td>前端的 Firebase SDK 使用 12.19.0，由 Google 的網址（gstatic）以 ES module 載入</td><td>13.0.0 是 6 天前剛發布的大版本，先用已發布一個月的穩定版；App 沒有打包流程</td></tr>
+            <tr><td>D-046</td><td>2026-10-13</td><td>登出時保留這支手機上的暫存資料（Firestore 離線快取）</td><td>使用者決定；重新登入比較快。權限仍由伺服器端規則把關</td></tr>
+            <tr><td>D-045</td><td>2026-10-13</td><td>一定要先用 Google 登入才能使用 App；資料只存雲端一份</td><td>使用者決定；避免本機與雲端兩份資料對不起來</td></tr>
+            <tr><td>D-044</td><td>2026-10-13</td><td>App 名稱改為 <strong>Itineris</strong>（頁面標題、首頁品牌字、規劃文件標題）；GitHub repo 也改名為 <code>ChiCheLo/Itineris</code>（取代 D-001 的 repo 名稱）；localStorage key <code>travelplan.v1</code> 不變</td><td>使用者決定；key 改名會讓瀏覽器裡已存的資料讀不到</td></tr>
+            <tr><td>D-043</td><td>2026-10-13</td><td>行程花費預設除以成員人數；填花費時可另外標記「部分人分攤」（只除以選到的人）或「個人開銷」（全額算進那個人）。旅程設定的手動「人數」欄位改由成員人數取代（修改 D-030）</td><td>使用者決定：一般是成員人數，少部分是幾個人分或個人開銷，填寫時另外記</td></tr>
+            <tr><td>D-042</td><td>2026-10-13</td><td>機票上的快速通關各自勾，存在個人資料</td><td>使用者決定；能不能走快速通關看每個人的護照與申請狀況</td></tr>
+            <tr><td>D-041</td><td>2026-10-13</td><td>第一次登入時，把瀏覽器裡的舊資料自動上傳到帳號</td><td>使用者決定</td></tr>
+            <tr><td>D-040</td><td>2026-10-13</td><td>維持 Firebase 免費方案（Spark），邀請與權限用 Firestore 安全規則處理，不使用 Cloud Functions</td><td>Cloud Functions 需要升級付費方案並綁信用卡；兩人使用的功能用安全規則就能安全做到</td></tr>
+            <tr><td>D-039</td><td>2026-10-13</td><td>只有建立者可以刪除整趟旅程；旅伴可以編輯、可以退出</td><td>使用者決定</td></tr>
+            <tr><td>D-038</td><td>2026-10-13</td><td>邀請旅伴兩種方式都做：有期限的邀請連結、輸入對方 Gmail</td><td>使用者決定</td></tr>
+            <tr><td>D-037</td><td>2026-10-13</td><td>準備清單拆開：攜帶物品兩人共用；護照、簽證與入境資料各自一份（個人資料）</td><td>使用者決定</td></tr>
+            <tr><td>D-036</td><td>2026-10-13</td><td>登入只用 Google（Firebase Auth 的 Google 登入），不做帳號密碼；因此不需要 Email 驗證、忘記密碼、密碼強度規則</td><td>使用者決定（確認 D-032）；密碼與兩步驟驗證由 Google 帳號管理，App 不保存任何密碼</td></tr>
+            <tr><td>D-035</td><td>2026-10-13</td><td>切換日期時網址跟著變，但用 <code>history.replaceState</code> 取代目前紀錄，不新增「上一頁」</td><td>使用者決定；重新整理仍停在同一天，返回鍵直接回上一個頁面，不會一天一天倒退</td></tr>
+            <tr><td>D-034</td><td>2026-10-13</td><td>正式版改為前後端分離：後端用 Firebase 全套（Auth 登入、Firestore 資料庫、需要時用 Cloud Functions），網站放 Firebase Hosting，之後做成手機 App（先 PWA）；取代原本「純前端、localStorage」（D-003）</td><td>使用者決定；作業沒有規定要自己寫後端或密碼加密，交給 Firebase Auth 處理密碼最安全、工作量最小</td></tr>
             <tr><td>D-033</td><td>2026-10-12</td><td>UI 改版降低 AI 感：Swiss 極簡＋Editorial、墨黑主色＋朱紅訊號色、襯線標題、細線分隔、行程改時間軸（規範見第 7 節，取代 D-006 的 ui-design-reference）</td><td>使用者要求「不要 AI 感那麼重」並使用 ui-ux-pro-max</td></tr>
           </tbody>
         </table>
@@ -572,6 +657,45 @@ type Activity = {
     <!-- 10 -->
     <section id="log">
       <h2>10. 開發日誌</h2>
+      <div class="log-entry">
+        <div class="date">2026-10-13（正式版規劃開始）</div>
+        <ul>
+          <li>使用者已 commit 原型（<code>8221aa5 protoyype完成</code>）。</li>
+          <li>修正（已含在該 commit）：行程頁切換日期時畫面會跳回最上面。改為同一趟旅程內切換日期、點查詢結果時保留捲動位置，換分頁才回到頂端。</li>
+          <li>使用者想把原型完善成正式版：前後端分離、接資料庫、用 Firebase＋git 架站或包成手機 App；登入要跟後端、資料庫一起做，並參考業界的帳號密碼做法確保資安。</li>
+          <li>整體步驟（每一步開始前先問使用者）：1 決定架構 → 2 決定登入方式 → 3 設計資料庫與 API → 4 後端（登入、資料庫、權限規則） → 5 前端改接後端 → 6 部署（Firebase Hosting＋GitHub 自動上線） → 7 手機 App（先 PWA） → 8 資安檢查（OWASP）。</li>
+          <li>第 1 步：使用者選 Firebase 全套，作業沒有規定要自己寫後端（D-034）。</li>
+          <li>切換日期與點查詢結果改用 <code>replaceState</code>（D-035）。自動測試：切換兩次日期新增 0 筆歷史紀錄，換到準備清單後按返回鍵回到最後看的那一天，捲動位置保留。</li>
+          <li>第 2 步（登入方式）：使用者先選「只有 Google 登入」，同時勾了 Email 驗證、忘記密碼、密碼強度；說明這三項只適用帳號密碼登入後，使用者確認只用 Google 登入（D-036）。</li>
+          <li>第 3 步（資料庫設計）：使用者決定準備清單拆開（物品共用、證件各自，D-037）、兩種邀請方式都做（D-038）、只有建立者能刪除旅程（D-039）、舊資料自動上傳（D-041）。為了不用綁卡，邀請與權限改用安全規則處理（D-040）。資料庫結構草案寫在第 6 節。</li>
+          <li>第 3 步補充：快速通關各自勾（D-042）；花費預設除以成員人數，可另外標記部分人分攤或個人開銷（D-043）。使用者確認資料庫結構，進入第 4 步。</li>
+          <li>使用者將 App 名稱改為 Itineris（D-044），已更新頁面標題、首頁品牌字與文件標題。</li>
+          <li>第 4 步：使用者建立 Firebase 專案 <code>itineris-de7ab</code>（Authentication 開啟 Google 登入；Firestore 選標準版、asia-east1、正式版模式）。主控台建議的 <code>npm install firebase</code> 不需要（App 沒有打包流程，SDK 由 Google 的網址載入）；<code>getAnalytics</code> 不加（使用者沒提出，且會蒐集使用紀錄）。</li>
+          <li>新增 <code>js/firebase-config.js</code>（專案設定，不是密碼）、<code>firestore.rules</code>（安全規則：個人資料只有本人可讀寫；旅程只有成員可讀寫；只能把自己加入旅程，且需有效邀請碼或在 Gmail 邀請名單中；只有建立者能刪除旅程；邀請碼 20 碼以上、最長 30 天、不能列出；欄位與長度檢查）、<code>firebase.json</code>、<code>.firebaserc</code>、<code>.gitignore</code>。規則尚未部署。</li>
+          <li>使用者同意安裝 Node.js 與 Java 做本機自動測試：用 winget 安裝 Node.js LTS（v24.20.0）與 Eclipse Temurin JDK 21；專案加入 <code>package.json</code>，開發用套件 <code>firebase-tools</code>、<code>@firebase/rules-unit-testing</code>、<code>firebase</code>（只用於測試，網站不打包）。</li>
+          <li>新增 <code>tests/firestore.rules.test.js</code>：在 Firestore 模擬器（demo 專案，不碰正式資料庫）驗證 32 項規則，包括未登入、個人資料隱私、成員讀寫、欄位驗證、建立旅程、邀請連結（有效／過期／別趟旅程／亂猜／加別人）、Gmail 邀請（已驗證／未驗證／不在名單）、刪除與退出權限、顯示名稱、邀請碼建立限制。執行 <code>npm run test:rules</code>，32 項全部通過。</li>
+          <li>使用者在自己的終端機執行 <code>npx firebase login</code>（終端機在安裝 Node.js 前就開著，需重新讀取 PATH）。部署前再跑一次測試（32/32 通過），執行 <code>npm run deploy:rules</code>，規則編譯成功並發布到 <code>itineris-de7ab</code>。第 4 步完成。</li>
+          <li>第 5 步（前端改接 Firebase）：使用者決定一定要先登入（D-045）、登出保留暫存（D-046）；SDK 用 12.19.0（D-047）。</li>
+          <li>新增 <code>js/data.js</code>（資料存取層）：Google 登入；即時監聽「我是成員的旅程」、每天行程、個人資料、Gmail 邀請；畫面修改後比對出改了哪些文件才寫入（不整份覆蓋）；新旅程用同一批次寫入旅程＋每天行程＋個人資料；刪除旅程等 6 秒（可復原）再用批次刪除；邀請連結、Gmail 加入、退出旅程；離線快取。</li>
+          <li><code>js/app.js</code> 改為 ES module：登入畫面、載入中、邀請連結頁（<code>#/join/:id/:code</code>）、首頁與旅程列表的 Gmail 邀請卡片、成員面板（成員名單、Gmail 邀請、產生／複製／分享邀請連結）、帳號與登出；旅伴的編輯面板只有「退出旅程」；活動加入「花費分攤」（全部平分／部分成員／只算我，D-043），預算依分攤計算；旅程設定移除手動「人數」；第一次登入把這支手機的原型資料上傳（一支手機只給第一個登入的帳號）。</li>
+          <li>規則調整：每天行程的寫入改用 <code>getAfter</code> 判斷成員，讓新旅程可以和第一天行程同一批次建立（不影響安全：批次中旅程的寫入仍要通過旅程規則）。規則測試增加 2 項，共 34 項全部通過。<strong>調整後的規則尚未部署。</strong></li>
+          <li>測試時發現並修正：新旅程還沒寫進伺服器就去監聽／寫入每天行程會被規則拒絕，且失敗的寫入會卡住後面的寫入 → 改成批次建立、寫進伺服器後才監聽；畫面與資料層共用同一份物件，畫面修改時比對不出差異而沒有寫入 → 交給畫面前先複製；同一支手機換帳號登入時會嘗試上傳前一個人的原型資料 → 改為一支手機只上傳一次。</li>
+          <li>端對端測試（本機模擬器 + headless Chrome，模擬 Alice、Bob、Carol 三個帳號）38 項全部通過：登入畫面、原型資料上傳、新增旅程／活動／預算／物品／護照寫到正確的文件、Gmail 邀請與加入、邀請連結加入、旅伴看不到別人的預算與證件、共用物品同步、分攤計算（520÷2、520÷3、個人開銷不算別人）、旅伴只能退出不能刪除、刪除可復原、真的刪除會清掉每天行程與個人資料、退出旅程。</li>
+          <li>新增 <code>npm run dev</code>（本機網站，連正式 Firebase）與 <code>npm run dev:emulator</code>（本機網站＋本機模擬器，網址加 <code>?emulator</code>）。App 改為 ES module 後不能再雙擊 <code>index.html</code> 開啟。</li>
+          <li>使用者提問：刪除帳號會不會讓前端送出數十個刪除請求？說明會用批次刪除；使用者決定暫不做刪除帳號（D-048）。使用者提問：部署後怎麼在其他手機使用？說明需要第 6 步把網站部署到 Firebase Hosting（https://itineris-de7ab.web.app）。</li>
+          <li>使用者決定先測試再決定部署，部署前還有自己的事要處理；網站公開 App 與規劃文件（D-049）。調整後的規則仍未部署。</li>
+          <li>Logo：<code>LOGO字.png</code> 放到首頁與登入頁（D-050），新增 <code>assets/logo-wordmark.png</code>（69 KB）與 <code>assets/logo-wordmark-dark.png</code>（17 KB）；<code>firebase.json</code> 排除原始 Logo 檔。截圖確認淺色與深色模式。</li>
+          <li>使用者提問：用註冊 Firebase 的 Google 帳號登入，是否是最高權限？說明 App 內權限只由安全規則決定，專案擁有者在 App 裡跟一般使用者一樣；最高權限在 Firebase 主控台（可看所有資料、管理帳號與規則），建議該帳號開啟兩步驟驗證。</li>
+          <li>日期／時間選取（D-051）：旅程的出發日與回程日共用一個日曆（選完出發日自動接著選回程日、回程日不能早於出發日、標示區間與「共幾天」）；機票出發日期選完自動帶入抵達日期、抵達日期不能早於出發日期；時間用「時」「分」捲動清單（1 分鐘刻度），重新打開時捲到已選的時間，有「清除」「完成」。依 ui-ux-pro-max（資料庫沒有日期選擇器的專門條目，採用通用原則：在地日期格式、看得見的標籤、44px 點擊範圍）。自動測試 20 項全部通過，截圖確認淺色與深色模式。登機時間與活動的開始／結束時間仍是瀏覽器內建的時間欄位。</li>
+          <li>動畫（D-052、D-053）：日曆／時間展開區平順展開與收起、換月份滑動；底部面板關閉改為往下滑出去（取消關閉時如果又打開會保留面板）。自動測試 27 項（含展開高度逐步變化、關閉動畫、Esc、關到一半又打開）全部通過；端對端測試 38 項重跑全部通過。</li>
+          <li>使用者把日曆／時間的展開與收起都調成 0.8 秒（D-054）；登機時間、活動開始／結束時間改用同樣的時間選擇（D-055）。日期／時間測試增加到 35 項（含登機時間、活動時間、結束早於開始的錯誤），端對端 38 項，全部通過。</li>
+          <li>收起動畫：使用者試用後改為日曆與時間清單都是 0.35 秒（展開維持 0.8 秒，D-054）。</li>
+          <li>標題列（D-056）：Logo＋頭像帳號選單（點外面或按 Esc 關閉），任何頁面都能登出。測試時發現並修正：有 <code>hidden</code> 屬性但自己設定了 <code>display</code> 的元素不會真的藏起來 → 帳號選單關掉後仍顯示、活動表單的「誰要分攤」成員勾選區一直顯示；加上全域 <code>[hidden] { display: none !important; }</code>，並把測試改成檢查畫面上是否真的看不到。標題列測試 17 項、日期／時間 35 項、端對端 38 項，全部通過。</li>
+          <li>首頁「進行中的旅程」標示（D-057）：測試即將出發的旅程不標示、今天出發的旅程有標示且用訊號色，截圖確認淺色與深色模式。</li>
+          <li>行程頁「成員」按鈕改為成員圖示＋人數（D-058）；端對端測試改為檢查圖示、數字與「成員 3 人」的無障礙名稱，38 項全部通過。</li>
+          <li>使用者將 GitHub repo 改名為 <code>ChiCheLo/Itineris</code>；本機 <code>origin</code> 改為 https://github.com/ChiCheLo/Itineris.git，確認可連線且與遠端同步。本機資料夾名稱仍是 <code>TravelPlan_WebAPP</code>。</li>
+        </ul>
+      </div>
       <div class="log-entry">
         <div class="date">2026-10-12（UI 改版：降低 AI 感）</div>
         <ul>

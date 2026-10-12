@@ -1,0 +1,182 @@
+rules_version = '2';
+
+// Itineris 的 Firestore 安全規則（後端的權限檢查都在這裡，前端無法繞過）
+// 設計見 docs/index.html 第 6 節；決策 D-036～D-043
+// 原則：沒寫到的一律拒絕；沒登入什麼都不能做。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- 共用小工具 ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // 這次寫入改動了哪些欄位
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function isDate(s) {
+      return s is string && s.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function text(s, max) {
+      return s is string && s.size() >= 1 && s.size() <= max;
+    }
+
+    function listMax(l, max) {
+      return l is list && l.size() <= max;
+    }
+
+    function tripMembers(tripId) {
+      return get(/databases/$(database)/documents/trips/$(tripId)).data.members;
+    }
+
+    // 寫入後的成員名單：新旅程與第一天行程在同一批次寫入時，也能看到「這批剛建立的旅程」
+    function tripMembersAfter(tripId) {
+      return getAfter(/databases/$(database)/documents/trips/$(tripId)).data.members;
+    }
+
+    // ---------- 使用者與個人資料 ----------
+    // 個人資料（預算、購買清單、護照、簽證、快速通關）只有本人能讀寫，旅伴看不到（D-025、D-037、D-042）
+
+    match /users/{uid} {
+      allow read, delete: if isSelf(uid);
+      allow create, update: if isSelf(uid)
+        && request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'createdAt', 'updatedAt']);
+
+      match /personal/{tripId} {
+        allow read, delete: if isSelf(uid);
+        allow create, update: if isSelf(uid) && validPersonal(request.resource.data);
+      }
+    }
+
+    function validPersonal(d) {
+      return d.keys().hasOnly(['carried', 'shopping', 'passport', 'visa', 'fastTrack', 'updatedAt'])
+        && d.get('carried', {}) is map
+        && listMax(d.get('shopping', []), 300)
+        && listMax(d.get('passport', []), 100)
+        && listMax(d.get('visa', []), 100)
+        && d.get('fastTrack', {}) is map;
+    }
+
+    // ---------- 旅程（成員共用） ----------
+
+    function validTrip(d) {
+      return d.keys().hasOnly([
+          'title', 'destination', 'startDate', 'endDate', 'currency',
+          'ownerId', 'members', 'memberProfiles', 'invitedEmails',
+          'flights', 'packing', 'joinCode', 'createdAt', 'updatedAt'
+        ])
+        && text(d.title, 60)
+        && text(d.destination, 60)
+        && isDate(d.startDate) && isDate(d.endDate) && d.startDate <= d.endDate
+        && d.currency is string && d.currency.size() == 3
+        && d.ownerId is string
+        && listMax(d.members, 20) && d.ownerId in d.members
+        && d.memberProfiles is map
+        && listMax(d.get('invitedEmails', []), 20)
+        && listMax(d.get('flights', []), 50)
+        && listMax(d.get('packing', []), 300);
+    }
+
+    // memberProfiles 只能改自己那一筆（顯示名稱、頭像）
+    function onlyOwnProfile() {
+      return !('memberProfiles' in changedKeys())
+        || request.resource.data.memberProfiles.diff(resource.data.memberProfiles).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // 成員一般編輯：行程、機票、物品清單、邀請名單都能改；建立者與成員名單不能從這裡改
+    function memberEdit() {
+      return request.auth.uid in resource.data.members
+        && !changedKeys().hasAny(['ownerId', 'members', 'createdAt', 'joinCode']);
+    }
+
+    // 用 Gmail 邀請：Google 已驗證的 Email 在邀請名單裡（D-038）
+    function invitedByEmail(d) {
+      return request.auth.token.email_verified == true
+        && request.auth.token.email in d.get('invitedEmails', []);
+    }
+
+    // 加入旅程只能把「自己」加到成員名單最後面
+    function addsOnlySelf() {
+      return !(request.auth.uid in resource.data.members)
+        && request.resource.data.members == resource.data.members.concat([request.auth.uid]);
+    }
+
+    function joinByEmail() {
+      return invitedByEmail(resource.data)
+        && addsOnlySelf()
+        && changedKeys().hasOnly(['members', 'memberProfiles', 'updatedAt']);
+    }
+
+    // 用邀請連結：寫入時附上邀請碼，邀請碼要屬於這趟旅程且還沒過期（D-038）
+    function joinByInvite(tripId) {
+      let invite = get(/databases/$(database)/documents/invites/$(request.resource.data.joinCode));
+      return addsOnlySelf()
+        && changedKeys().hasOnly(['members', 'memberProfiles', 'joinCode', 'updatedAt'])
+        && invite.data.tripId == tripId
+        && invite.data.expiresAt > request.time;
+    }
+
+    // 旅伴退出旅程：只能把自己移出；建立者不能退出（D-039）
+    function leave() {
+      return request.auth.uid in resource.data.members
+        && request.auth.uid != resource.data.ownerId
+        && changedKeys().hasOnly(['members', 'memberProfiles', 'updatedAt'])
+        && request.resource.data.members.toSet() == resource.data.members.toSet().difference([request.auth.uid].toSet());
+    }
+
+    match /trips/{tripId} {
+      allow read: if signedIn()
+        && (request.auth.uid in resource.data.members || invitedByEmail(resource.data));
+
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && validTrip(request.resource.data);
+
+      allow update: if signedIn()
+        && validTrip(request.resource.data)
+        && onlyOwnProfile()
+        && (memberEdit() || joinByEmail() || joinByInvite(tripId) || leave());
+
+      // 只有建立者能刪除整趟旅程（D-039）；前端要先刪掉底下的 days，再刪旅程
+      allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;
+
+      // 每天的行程：分開存，兩人同時改不同天不會互相覆蓋
+      match /days/{date} {
+        allow read, delete: if signedIn() && request.auth.uid in tripMembers(tripId);
+        allow create, update: if signedIn()
+          && request.auth.uid in tripMembersAfter(tripId)
+          && isDate(date)
+          && request.resource.data.keys().hasOnly(['date', 'activities', 'updatedAt'])
+          && request.resource.data.date == date
+          && listMax(request.resource.data.activities, 100);
+      }
+    }
+
+    // ---------- 邀請連結 ----------
+    // 邀請碼是文件 ID（前端用 crypto 產生 20 碼以上的亂數），知道邀請碼才讀得到；不能列出所有邀請
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && code.size() >= 20
+        && request.resource.data.keys().hasOnly(['tripId', 'createdBy', 'expiresAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.auth.uid in tripMembers(request.resource.data.tripId)
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'd');
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+    }
+  }
+}

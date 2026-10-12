@@ -1,0 +1,26 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "package.json",
+      "package-lock.json",
+      "firestore.rules",
+      "tests/**",
+      "Logo*.jpg",
+      "LOGO*.png",
+      "**/.*",
+      "**/node_modules/**",
+      "**/*.log"
+    ]
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "hosting": { "port": 5000 },
+    "ui": { "enabled": true }
+  }
+}

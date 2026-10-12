@@ -1,0 +1,17 @@
+{
+  "name": "itineris",
+  "private": true,
+  "description": "Itineris 行程規劃：開發用工具（Firebase CLI、安全規則測試）。網站本身不需要打包。",
+  "type": "module",
+  "scripts": {
+    "dev": "firebase emulators:start --only hosting",
+    "dev:emulator": "firebase emulators:start --only hosting,auth,firestore --project demo-itineris",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-itineris \"node --test tests/*.test.js\"",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0",
+    "firebase-tools": "^15.33.0"
+  }
+}
