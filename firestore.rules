@@ -146,6 +146,21 @@ service cloud.firestore {
         && request.resource.data.members.toSet() == resource.data.members.toSet().difference([request.auth.uid].toSet());
     }
 
+    // 建立者移除其他成員（D-074）：一次只能移除一位、不能移除自己、不能順便加人或改其他內容；
+    // 被移除的人的顯示名稱可以一起拿掉。被移除的人之後只要有邀請就能再加回來（使用者決定）
+    function ownerRemoveMember() {
+      let before = resource.data.members.toSet();
+      let after = request.resource.data.members.toSet();
+      let removed = before.difference(after);
+      return request.auth.uid == resource.data.ownerId
+        && changedKeys().hasOnly(['members', 'memberProfiles', 'updatedAt'])
+        && removed.size() == 1
+        && after.difference(before).size() == 0
+        && !(resource.data.ownerId in removed)
+        && (!('memberProfiles' in changedKeys())
+          || request.resource.data.memberProfiles.diff(resource.data.memberProfiles).affectedKeys().difference(removed).size() == 0);
+    }
+
     match /trips/{tripId} {
       allow read: if signedIn()
         && (request.auth.uid in resource.data.members || invitedByEmail(resource.data));
@@ -157,8 +172,8 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && validTrip(request.resource.data)
-        && onlyOwnProfile()
-        && (memberEdit() || ownerSoftDelete() || joinByEmail() || joinByInvite(tripId) || leave());
+        && ((onlyOwnProfile() && (memberEdit() || ownerSoftDelete() || joinByEmail() || joinByInvite(tripId) || leave()))
+          || ownerRemoveMember());
 
       // 只有建立者能刪除整趟旅程（D-039）；前端要先刪掉底下的 days，再刪旅程
       allow delete: if signedIn() && request.auth.uid == resource.data.ownerId;

@@ -482,6 +482,15 @@ export function joinByEmail(tripId) {
   });
 }
 
+// 建立者把旅伴移出旅程（D-074）；對方自己的預算等個人資料在他的帳號裡，不受影響
+export function removeMember(tripId, uid) {
+  return updateDoc(doc(db, 'trips', tripId), {
+    members: arrayRemove(uid),
+    [`memberProfiles.${uid}`]: deleteField(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export function leaveTrip(tripId) {
   const uid = auth.currentUser.uid;
   write(deleteDoc(doc(db, 'users', uid, 'personal', tripId)));

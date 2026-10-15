@@ -259,6 +259,32 @@ describe('成員權限', () => {
     await bobJoins();
     await assertFails(updateDoc(doc(as('bob'), 'trips/t1'), { members: ['bob'] }));
   });
+  test('建立者可以移除旅伴（連同顯示名稱）', async () => {
+    await bobJoins();
+    await assertSucceeds(updateDoc(doc(as('alice'), 'trips/t1'), { members: arrayRemove('bob'), 'memberProfiles.bob': deleteField(), updatedAt: Timestamp.now() }));
+  });
+  test('建立者不能移除自己', async () => {
+    await bobJoins();
+    await assertFails(updateDoc(doc(as('alice'), 'trips/t1'), { members: ['bob'] }));
+  });
+  test('建立者一次只能移除一位，也不能順便加人或改其他內容', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'trips/t1'), { members: ['alice', 'bob', 'carol'] });
+    });
+    const db = as('alice');
+    await assertFails(updateDoc(doc(db, 'trips/t1'), { members: ['alice'] }));
+    await assertFails(updateDoc(doc(db, 'trips/t1'), { members: ['alice', 'bob', 'mallory'] }));
+    await assertFails(updateDoc(doc(db, 'trips/t1'), { members: arrayRemove('carol'), title: '順便改名' }));
+  });
+  test('移除旅伴時不能改到其他人的顯示名稱', async () => {
+    await bobJoins();
+    await assertFails(updateDoc(doc(as('alice'), 'trips/t1'), { members: arrayRemove('bob'), 'memberProfiles.alice': { name: '改掉' } }));
+  });
+  test('被移除的人有有效的邀請連結就能再加回來', async () => {
+    await bobJoins();
+    await updateDoc(doc(as('alice'), 'trips/t1'), { members: arrayRemove('bob'), 'memberProfiles.bob': deleteField() });
+    await assertSucceeds(joinWith(as('bob'), 'bob', VALID_CODE));
+  });
   test('建立者不能退出（要刪除旅程）', async () => {
     await assertFails(updateDoc(doc(as('alice'), 'trips/t1'), { members: arrayRemove('alice') }));
   });

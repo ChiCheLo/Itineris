@@ -81,6 +81,7 @@ import * as data from './data.js';
   let user = null;       // 目前登入的 Google 帳號
   let ready = false;     // 第一次從雲端讀完資料了沒
   let pendingRemote = null;
+  const locallyGone = new Set(); // 自己刪除或退出的旅程；其他突然不見的旅程＝被建立者移出或刪除
 
   function readLocal(key) {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -499,6 +500,11 @@ import * as data from './data.js';
     const changed = data.stable({ t: state.trips, p: state.personal, i: state.invitations })
       !== data.stable({ t: snap.trips, p: snap.personal, i: snap.invitations });
     if (changed) {
+      // 被建立者移出、或旅程被建立者刪除：告訴使用者，不要讓旅程無聲無息地消失
+      if (wasReady) {
+        const lost = state.trips.filter((t) => !locallyGone.has(t.id) && !snap.trips.some((s) => s.id === t.id));
+        if (lost.length) toast(`你已無法查看「${lost[0].title}」（建立者把你移出或刪除了這趟旅程）`);
+      }
       state.trips = snap.trips;
       state.personal = snap.personal;
       state.invitations = snap.invitations;
@@ -1403,12 +1409,14 @@ import * as data from './data.js';
             data.leaveTrip(trip.id)
               .then(() => toast(`已退出「${trip.title}」`))
               .catch(() => toast('退出失敗，請確認網路後再試一次'));
+            locallyGone.add(trip.id);
             state.trips = state.trips.filter((x) => x.id !== trip.id);
             location.hash = '#/trips';
             return;
           }
           const undo = snapshot();
-          state.trips = state.trips.filter((x) => x.id !== trip.id);
+          locallyGone.add(trip.id);
+            state.trips = state.trips.filter((x) => x.id !== trip.id);
           save();
           location.hash = '#/trips';
           toast(`已刪除「${trip.title}」`, undo);
@@ -1428,6 +1436,7 @@ import * as data from './data.js';
             <span class="avatar" aria-hidden="true">${esc(memberName(trip, u).slice(0, 1))}</span>
             <span class="member-name">${esc(u === me() ? `${user.displayName || '我'}（你）` : memberName(trip, u))}</span>
             ${u === trip.ownerId ? '<span class="badge">建立者</span>' : ''}
+            ${isOwner(trip) && u !== me() ? `<button class="btn danger small" type="button" data-sheet-action="remove-member" data-uid="${esc(u)}" aria-label="把 ${esc(memberName(trip, u))} 移出旅程">移除</button>` : ''}
           </li>`).join('')}
         ${trip.invitedEmails.filter((e) => e !== user.email).map((e) => `
           <li class="member pending">
@@ -1485,6 +1494,35 @@ import * as data from './data.js';
           }
           openMembers(trip, inviteLink);
           toast(`已邀請 ${email}`);
+        },
+        // 移出旅伴（D-074）：沒辦法復原（建立者不能替別人加回來），所以按兩次才執行
+        'remove-member': (btn) => {
+          const uid = btn.dataset.uid;
+          const name = memberName(trip, uid);
+          if (btn.dataset.confirm !== '1') {
+            btn.dataset.confirm = '1';
+            btn.textContent = '確定移除？';
+            btn.setAttribute('aria-label', `再按一次，把 ${name} 移出旅程`);
+            setTimeout(() => {
+              if (!btn.isConnected || btn.disabled) return;
+              delete btn.dataset.confirm;
+              btn.textContent = '移除';
+              btn.setAttribute('aria-label', `把 ${name} 移出旅程`);
+            }, 4000);
+            return;
+          }
+          btn.disabled = true;
+          data.removeMember(trip.id, uid)
+            .then(() => {
+              trip.members = trip.members.filter((m) => m !== uid);
+              delete trip.memberProfiles[uid];
+              if (sheet.open) openMembers(trip, inviteLink);
+              toast(`已把 ${name} 移出旅程`);
+            })
+            .catch(() => {
+              btn.disabled = false;
+              showSheetError('移除失敗，請確認網路後再試一次');
+            });
         },
         'remove-email': (btn) => {
           trip.invitedEmails = trip.invitedEmails.filter((e) => e !== btn.dataset.email);
