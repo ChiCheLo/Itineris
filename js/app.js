@@ -372,7 +372,7 @@ import * as data from './data.js';
         <h1 class="login-title">把機票、行程與預算<br>放在同一個地方</h1>
         <p class="login-text">${joining
           ? '你收到一趟旅程的邀請。用 Google 帳號登入後就會加入。'
-          : '用 Google 帳號登入，兩支手機就能看同一份行程；預算、購買清單和證件只有你自己看得到。'}</p>
+          : '還在規劃行程？別忘了帶上你的大腿掛件'}</p>
         <button class="btn primary login-btn" type="button" data-action="sign-in">${GOOGLE_ICON}用 Google 登入</button>
         <p class="form-error" id="login-error" role="alert" hidden></p>
         <p class="login-note">Itineris 不會看到或儲存你的 Google 密碼。</p>

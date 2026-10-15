@@ -387,7 +387,8 @@ users/{uid}/personal/{tripId}       // 個人資料：只有本人能讀寫，�
   carried:  { TWD: number, NZD: number }   // 預算：帶了多少（D-025）
   shopping: ShopItem[]                     // 購買清單
   passport: CheckItem[]                    // 準備清單：護照（各自一份，D-037）
-  visa:     CheckItem[]                    // 準備清單：簽證與入境資料（各自一份）
+  packing:  CheckItem[]                    // 準備清單：攜帶物品（各自一份，D-075）
+  visaDone: { [itemId]: true }             // 準備清單：簽證與入境資料「自己勾了哪些」（D-075）
   fastTrack: { [flightId]: boolean }       // 機票上的快速通關勾選（各自勾，D-042）
 
 trips/{tripId}                      // 共用：成員都能讀寫
@@ -397,8 +398,10 @@ trips/{tripId}                      // 共用：成員都能讀寫
   memberProfiles: { [uid]: { name, photoURL } }
   invitedEmails: string[]           // 用 Gmail 邀請的旅伴（D-038）
   flights: Flight[]
-  packing: CheckItem[]              // 準備清單：攜帶物品（共用，D-037）
+  visa: { id, text }[]              // 準備清單：簽證與入境資料的項目（大家共用，勾選各自存，D-075）
   createdAt, updatedAt
+  （舊欄位：trips.packing 是改版前共用的攜帶物品、personal.visa 是改版前各自的簽證清單，
+    只用來搬移舊資料，新版不再寫入，D-075）
 
 trips/{tripId}/days/{YYYY-MM-DD}    // 每天的行程分開存：兩人同時改不同天不會互相覆蓋
   date, activities: Activity[], updatedAt
@@ -624,6 +627,8 @@ type Activity = {
             <tr><td>D-030</td><td>2026-10-12</td><td>行程上的花費顯示全額；算進預算時除以人數。旅程設定新增「人數」欄位，預設 2 人；購買清單不除</td><td>使用者決定（行程顯示全額、預算要除）；人數放在旅程設定，購買清單本來就是個人的</td></tr>
             <tr><td>D-031</td><td>2026-10-12</td><td>兩台手機都可以編輯行程</td><td>使用者決定</td></tr>
             <tr><td>D-032</td><td>2026-10-12</td><td>同步用 Google 登入</td><td>使用者決定</td></tr>
+            <tr><td>D-076</td><td>2026-10-16</td><td>登入畫面的說明文字「用 Google 帳號登入，兩支手機就能看同一份行程；預算、購買清單和證件只有你自己看得到。」刪掉，改成「還在規劃行程？別忘了帶上你的大腿掛件」（收到邀請時的說明不變）</td><td>使用者決定；原句在 D-075 後已不正確（簽證項目旅伴看得到）</td></tr>
+            <tr><td>D-075</td><td>2026-10-16</td><td>準備清單改分法（取代 D-037）：攜帶物品改成各自一份、旅伴看不到；簽證與入境資料的項目大家共用（誰新增、刪除，大家都看得到），但勾選是自己的，旅伴勾了不影響你；護照維持各自一份。舊資料自動搬移：改版前共用的攜帶物品變成每個人自己清單的起點（含當時的勾選），之後各改各的；改版前各自的簽證項目會併到共用清單，原本的勾選保留給本人</td><td>使用者要求</td></tr>
             <tr><td>D-074</td><td>2026-10-16</td><td>建立者可以把其他成員移出旅程：成員面板中旅伴旁邊有「移除」（只有建立者看得到），按兩次才執行（第一次變「確定移除？」，4 秒內沒按就還原）；規則限制只有建立者、一次一位、不能移除自己、不能順便加人或改其他內容、被移除者的顯示名稱可一併拿掉。被移除的人只要有邀請就能再加回來；他自己的預算等個人資料留在他的帳號。被移出的人畫面上會提示「你已無法查看」並離開該旅程</td><td>使用者要求，並決定被移除的人可以再用邀請加回來。移除無法復原（建立者不能替別人加回成員），所以用兩段式確認而不是「復原」</td></tr>
             <tr><td>D-073</td><td>2026-10-13</td><td>App 圖示改用使用者另外做的 <code>LOGO_icon.png</code>（256×256、白底飛機），產生 192、512、maskable 512（飛機縮到 81% 留在安全區）、iPhone 180、分頁 32；取代 D-070 從 LOGO.png 裁出的版本。原始檔不上傳到網站</td><td>使用者提供。原圖只有 256px，512 版是放大的，會略模糊；若有 512 或 1024 的原圖可替換</td></tr>
             <tr><td>D-072</td><td>2026-10-13</td><td>網頁、程式、樣式、規劃文件、manifest、App 圖示設定 <code>Cache-Control: no-cache</code>（每次打開都向伺服器確認有沒有新版，沒變只回很小的 304）；service worker 快取版本改為 v2，清掉手機上的舊快取</td><td>使用者同意。Firebase Hosting 預設快取 1 小時，部署新版後手機最慢 1 小時才拿到，期間可能新舊檔案混用</td></tr>
@@ -661,7 +666,7 @@ type Activity = {
             <tr><td>D-040</td><td>2026-10-13</td><td>維持 Firebase 免費方案（Spark），邀請與權限用 Firestore 安全規則處理，不使用 Cloud Functions</td><td>Cloud Functions 需要升級付費方案並綁信用卡；兩人使用的功能用安全規則就能安全做到</td></tr>
             <tr><td>D-039</td><td>2026-10-13</td><td>只有建立者可以刪除整趟旅程；旅伴可以編輯、可以退出</td><td>使用者決定</td></tr>
             <tr><td>D-038</td><td>2026-10-13</td><td>邀請旅伴兩種方式都做：有期限的邀請連結、輸入對方 Gmail</td><td>使用者決定</td></tr>
-            <tr><td>D-037</td><td>2026-10-13</td><td>準備清單拆開：攜帶物品兩人共用；護照、簽證與入境資料各自一份（個人資料）</td><td>使用者決定</td></tr>
+            <tr><td>D-037</td><td>2026-10-13</td><td>準備清單拆開：攜帶物品兩人共用；護照、簽證與入境資料各自一份（個人資料）。<strong>已由 D-075 取代</strong></td><td>使用者決定</td></tr>
             <tr><td>D-036</td><td>2026-10-13</td><td>登入只用 Google（Firebase Auth 的 Google 登入），不做帳號密碼；因此不需要 Email 驗證、忘記密碼、密碼強度規則</td><td>使用者決定（確認 D-032）；密碼與兩步驟驗證由 Google 帳號管理，App 不保存任何密碼</td></tr>
             <tr><td>D-035</td><td>2026-10-13</td><td>切換日期時網址跟著變，但用 <code>history.replaceState</code> 取代目前紀錄，不新增「上一頁」</td><td>使用者決定；重新整理仍停在同一天，返回鍵直接回上一個頁面，不會一天一天倒退</td></tr>
             <tr><td>D-034</td><td>2026-10-13</td><td>正式版改為前後端分離：後端用 Firebase 全套（Auth 登入、Firestore 資料庫、需要時用 Cloud Functions），網站放 Firebase Hosting，之後做成手機 App（先 PWA）；取代原本「純前端、localStorage」（D-003）</td><td>使用者決定；作業沒有規定要自己寫後端或密碼加密，交給 Firebase Auth 處理密碼最安全、工作量最小</td></tr>
@@ -735,6 +740,8 @@ type Activity = {
           <li>2026-10-16：新增「建立者移除成員」（D-074）。後端規則加上 <code>ownerRemoveMember()</code>，規則測試增加 5 項共 43 項通過；資料層 <code>removeMember()</code>；成員面板的移除按鈕與兩段式確認；被移出者的提示。新功能測試 12 項（建立者看得到、自己沒有按鈕、第一次只變確認、第二次才移除、顯示名稱一起拿掉、建立者不會誤報、放著 4 秒自動還原、旅伴看不到按鈕、被移出者看到提示並離開該旅程、沒有程式錯誤）全部通過；端對端 38、刪除 9、資安 22、日期／時間 35、標題列 17、轉機 9、安裝提示 5 項重跑全部通過。</li>
           <li>部署（規則 → 網站）：部署前規則測試 43 項通過。線上確認新版程式（<code>removeMember</code>、移除按鈕）、首頁 CSP 與 no-cache、隱藏檔案 404；線上網站開啟測試 5 項通過。</li>
           <li>使用者將 GitHub repo 改名為 <code>ChiCheLo/Itineris</code>；本機 <code>origin</code> 改為 https://github.com/ChiCheLo/Itineris.git，確認可連線且與遠端同步。本機資料夾名稱仍是 <code>TravelPlan_WebAPP</code>。</li>
+          <li>2026-10-16：commit「建立者可以移除成員」並 push 到 GitHub。準備清單改分法（D-075）：規則的個人資料加上 <code>packing</code>、<code>visaDone</code>，旅程加上 <code>visa</code>；資料層改成攜帶物品讀寫個人資料、簽證項目寫在旅程上（不含勾選）、勾選寫到自己的 <code>visaDone</code>，並自動搬移舊資料；畫面沒有改。規則測試增加 2 項共 45 項通過；端對端測試改成新的分法（攜帶物品只在個人資料、旅伴看不到；簽證項目大家看得到、勾選互不影響）共 43 項通過；舊資料搬移測試 15 項通過；資安 22、移除成員 12 項重跑通過。</li>
+          <li>登入畫面說明文字改成「還在規劃行程？別忘了帶上你的大腿掛件」（D-076）。部署前端對端測試 43 項通過；部署（規則 → 網站）完成，線上確認新版程式（新文字、<code>visaOf</code>）、CSP、隱藏檔案 404。</li>
         </ul>
       </div>
       <div class="log-entry">

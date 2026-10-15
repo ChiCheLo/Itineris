@@ -118,6 +118,17 @@ describe('個人資料（預算、購買清單、證件）只有本人能讀寫'
     await assertFails(getDoc(doc(db, 'users/alice/personal/t1')));
     await assertFails(setDoc(doc(db, 'users/alice/personal/t1'), { carried: { TWD: 0 } }));
   });
+  test('攜帶物品、簽證勾選狀態存在個人資料，本人可以寫、旅伴讀不到', async () => {
+    await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/personal/t1'), {
+      carried: {}, shopping: [], passport: [], packing: [{ id: 'k1', text: '轉接頭', done: false }], visaDone: { v1: true }, fastTrack: {},
+    }));
+    await bobJoins();
+    await assertFails(getDoc(doc(as('bob'), 'users/alice/personal/t1')));
+  });
+  test('簽證與入境資料的項目是共用的：成員都能新增', async () => {
+    await bobJoins();
+    await assertSucceeds(updateDoc(doc(as('bob'), 'trips/t1'), { visa: [{ id: 'v1', text: 'NZeTA' }], updatedAt: Timestamp.now() }));
+  });
   test('不能塞入規則以外的欄位', async () => {
     await assertFails(setDoc(doc(as('alice'), 'users/alice/personal/t1'), { carried: {}, secret: 'x' }));
   });

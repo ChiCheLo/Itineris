@@ -2,9 +2,9 @@
 // 權限一律由 firestore.rules 在伺服器端檢查；這裡只負責「讀進來組成畫面要的樣子」與「找出改了什麼再寫回去」。
 //
 // Firestore 結構（docs/index.html 第 6 節）：
-//   trips/{tripId}                 共用：旅程、機票、攜帶物品、成員
+//   trips/{tripId}                 共用：旅程、機票、簽證與入境資料的項目、成員
 //   trips/{tripId}/days/{date}     共用：每天的行程
-//   users/{uid}/personal/{tripId}  個人：預算、購買清單、護照、簽證、快速通關
+//   users/{uid}/personal/{tripId}  個人：預算、購買清單、攜帶物品、護照、簽證項目的勾選、快速通關（D-075）
 //   invites/{code}                 邀請連結
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
@@ -70,7 +70,8 @@ const INVITE_DAYS = 7;
 // 刪除旅程（D-071）：按下刪除就在旅程上寫 deletedAt（立刻存下、離線也會排隊），所有人馬上看不到；
 // 按「復原」就拿掉。過了這段時間，建立者的 App 下次讀到時才把旅程與每天行程真的刪掉
 const PURGE_AFTER = 60 * 1000;
-const TRIP_FIELDS = ['title', 'destination', 'startDate', 'endDate', 'currency', 'invitedEmails', 'flights', 'packing'];
+// 旅程上舊的 packing（以前共用的攜帶物品）不再寫入，只在個人還沒有自己的清單時拿來當起點（D-075）
+const TRIP_FIELDS = ['title', 'destination', 'startDate', 'endDate', 'currency', 'invitedEmails', 'flights', 'visa'];
 
 // 護照預設項目用固定 id，每次組出來都一樣
 export const DEFAULT_PASSPORT = { id: 'passport-validity', text: '護照效期已確認', done: false };
@@ -181,6 +182,24 @@ const objects = (v) => (Array.isArray(v) ? v.filter((o) => o && typeof o === 'ob
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const strings = (v) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string') : []);
 
+// 攜帶物品（D-075 改成個人）：自己還沒存過就沿用旅程上舊的共用清單當起點
+const packingOf = (t, p) => objects(p?.packing ?? t?.packing);
+
+// 簽證與入境資料（D-075）：項目是旅程共用的，勾選是自己的（visaDone）。
+// 舊版每個人自己的簽證清單（personal.visa）併進來，下次存檔時搬到旅程上
+function visaOf(t, p) {
+  const done = { ...obj(p?.visaDone) };
+  const items = objects(t?.visa).map(({ done: _, ...v }) => v);
+  for (const v of objects(p?.visa)) {
+    if (!items.some((x) => x.id === v.id)) {
+      const { done: legacyDone, ...rest } = v;
+      items.push(rest);
+      if (legacyDone) done[v.id] = true;
+    }
+  }
+  return items.map((v) => ({ ...v, done: !!done[v.id] }));
+}
+
 function composeTrip(id) {
   const t = cache.trips.get(id);
   const days = cache.days.get(id) || new Map();
@@ -199,9 +218,9 @@ function composeTrip(id) {
     days: dateRange(t.startDate, t.endDate).map((date) => ({ date, activities: objects(days.get(date)?.activities) })),
     flights: objects(t.flights).map((f) => ({ ...f, from: obj(f.from), to: obj(f.to), fastTrack: !!obj(p.fastTrack)[f.id] })),
     prep: {
-      packing: objects(t.packing),
+      packing: packingOf(t, p),
       passport: p.passport ? objects(p.passport) : [DEFAULT_PASSPORT],
-      visa: objects(p.visa),
+      visa: visaOf(t, p),
     },
   };
 }
@@ -334,7 +353,8 @@ function personalDoc(trip, p = {}) {
     carried: p.carried || {},
     shopping: p.shopping || [],
     passport: trip.prep?.passport || [],
-    visa: trip.prep?.visa || [],
+    packing: trip.prep?.packing || [],
+    visaDone: Object.fromEntries((trip.prep?.visa || []).filter((v) => v.done).map((v) => [v.id, true])),
     fastTrack: Object.fromEntries((trip.flights || []).filter((f) => f.fastTrack).map((f) => [f.id, true])),
   };
 }
@@ -391,7 +411,7 @@ export function saveAll(state) {
       currency: trip.currency,
       invitedEmails: trip.invitedEmails || [],
       flights: (trip.flights || []).map(({ fastTrack, ...f }) => f),
-      packing: trip.prep?.packing || [],
+      visa: (trip.prep?.visa || []).map(({ done, ...v }) => v),
     };
 
     const isNew = !raw && !created.has(trip.id);
@@ -399,7 +419,7 @@ export function saveAll(state) {
       createTrip(user, trip, fields, state.personal[trip.id]);
       continue;
     }
-    if (raw && stable(pick(raw, TRIP_FIELDS)) !== stable(fields)) {
+    if (raw && stable({ ...pick(raw, TRIP_FIELDS), visa: raw.visa || [] }) !== stable(fields)) {
       write(updateDoc(tripRef, { ...fields, updatedAt: serverTimestamp() }));
     }
 
@@ -424,8 +444,11 @@ export function saveAll(state) {
         carried: kp?.carried || {},
         shopping: kp?.shopping || [],
         passport: kp?.passport || [DEFAULT_PASSPORT],
-        visa: kp?.visa || [],
+        packing: packingOf(raw, kp),
+        visaDone: kp?.visaDone || {},
         fastTrack: kp?.fastTrack || {},
+        // 還留著舊版個人簽證清單的話一定要重寫一次，把它拿掉（項目已經併到旅程上）
+        ...(kp?.visa ? { visa: kp.visa } : {}),
       };
       if (stable(before) !== stable(personal)) {
         write(setDoc(doc(db, 'users', user.uid, 'personal', trip.id), { ...personal, updatedAt: serverTimestamp() }));

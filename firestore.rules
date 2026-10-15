@@ -56,12 +56,16 @@ service cloud.firestore {
       }
     }
 
+    // 個人：攜帶物品、護照、簽證項目的勾選狀態（visaDone）都只有本人看得到（D-075）
+    // 'visa' 是舊版的個人簽證清單，保留讓舊資料讀得到，新版改存到旅程的共用清單
     function validPersonal(d) {
-      return d.keys().hasOnly(['carried', 'shopping', 'passport', 'visa', 'fastTrack', 'updatedAt'])
+      return d.keys().hasOnly(['carried', 'shopping', 'passport', 'packing', 'visa', 'visaDone', 'fastTrack', 'updatedAt'])
         && d.get('carried', {}) is map
         && listMax(d.get('shopping', []), 300)
         && listMax(d.get('passport', []), 100)
+        && listMax(d.get('packing', []), 300)
         && listMax(d.get('visa', []), 100)
+        && d.get('visaDone', {}) is map
         && d.get('fastTrack', {}) is map;
     }
 
@@ -71,7 +75,7 @@ service cloud.firestore {
       return d.keys().hasOnly([
           'title', 'destination', 'startDate', 'endDate', 'currency',
           'ownerId', 'members', 'memberProfiles', 'invitedEmails',
-          'flights', 'packing', 'joinCode', 'deletedAt', 'createdAt', 'updatedAt'
+          'flights', 'packing', 'visa', 'joinCode', 'deletedAt', 'createdAt', 'updatedAt'
         ])
         && text(d.title, 60)
         && text(d.destination, 60)
@@ -82,7 +86,8 @@ service cloud.firestore {
         && d.memberProfiles is map
         && listMax(d.get('invitedEmails', []), 20)
         && listMax(d.get('flights', []), 50)
-        && listMax(d.get('packing', []), 300);
+        && listMax(d.get('packing', []), 300)   // 舊版的共用攜帶物品，保留讓舊資料讀得到（新版改成個人）
+        && listMax(d.get('visa', []), 100);     // 簽證與入境資料：項目共用，勾選存在各自的個人資料（D-075）
     }
 
     // memberProfiles 只能改自己那一筆（顯示名稱、頭像）
