@@ -171,21 +171,30 @@ import * as data from './data.js';
 
   // 共用資料可能被旅伴改成奇怪的格式：花費一律轉成數字、分攤名單一定是陣列，格式不對就當成「全部平分」，
   // 避免畫面因此當掉（資安檢查：別人不能藉由亂寫資料讓你的 App 打不開）
-  const costOf = (a) => {
-    const n = Number(a.cost);
+  const amount = (v) => {
+    const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : 0;
   };
+  // 活動花費可以同時填當地幣別（cost）與台幣（costTWD）（D-079）；目的地本來就用台幣時只有 cost。
+  // 旅程幣別之後改成台幣的話，兩個加在一起，不會不見
+  const costCurrencies = (trip) => (trip.currency === 'TWD' ? ['TWD'] : [trip.currency, 'TWD']);
+  function costIn(a, trip, c) {
+    if (c === trip.currency) return amount(a.cost) + (c === 'TWD' ? amount(a.costTWD) : 0);
+    return c === 'TWD' ? amount(a.costTWD) : 0;
+  }
+  const hasCost = (a, trip) => costCurrencies(trip).some((c) => costIn(a, trip, c) > 0);
+  // 各幣別的金額，例：NZD 120 + TWD 3,000（沒填的幣別不顯示）
+  const fmtCosts = (trip, fn) => costCurrencies(trip).map((c) => [c, fn(c)]).filter(([, n]) => n > 0)
+    .map(([c, n]) => fmtMoney(n, c)).join(' + ');
   const splitUids = (s) => (Array.isArray(s?.uids) ? s.uids.filter((u) => typeof u === 'string') : []);
   const hasTime = (a) => typeof a.startTime === 'string' && a.startTime !== '';
 
-  // 這筆花費算在我身上多少：全部平分／部分人分攤／個人開銷
-  function myShare(a, trip) {
-    const cost = costOf(a);
-    if (!cost) return 0;
+  // 這筆花費有多少比例算在我身上：全部平分／部分人分攤／個人開銷（兩種幣別一起套用）
+  function myRatio(a, trip) {
     const s = a.split;
-    if (s?.type === 'self') return s.uid === me() ? cost : 0;
-    if (s?.type === 'some' && splitUids(s).length) return splitUids(s).includes(me()) ? cost / splitUids(s).length : 0;
-    return cost / membersOf(trip).length;
+    if (s?.type === 'self') return s.uid === me() ? 1 : 0;
+    if (s?.type === 'some' && splitUids(s).length) return splitUids(s).includes(me()) ? 1 / splitUids(s).length : 0;
+    return 1 / membersOf(trip).length;
   }
 
   function touch() {
@@ -837,16 +846,16 @@ import * as data from './data.js';
     return p.shopping.filter((x) => x.done && x.currency === c).reduce((s, x) => s + (x.price || 0), 0);
   }
 
-  // 行程：活動上有填花費的都算（包含住宿），幣別是旅程設定的幣別
+  // 行程：活動上有填花費的都算（包含住宿），台幣與當地幣別分開算（D-079）
   // total＝行程上顯示的全額；mine＝依分攤方式算在我身上的部分（D-030、D-043）
   function tripSpentIn(trip, c) {
-    if (trip.currency !== c) return { total: 0, mine: 0 };
     let total = 0;
     let mine = 0;
     for (const d of trip.days) {
       for (const a of d.activities) {
-        total += costOf(a);
-        mine += myShare(a, trip);
+        const cost = costIn(a, trip, c);
+        total += cost;
+        mine += cost * myRatio(a, trip);
       }
     }
     return { total, mine };
@@ -1054,7 +1063,7 @@ import * as data from './data.js';
 
   function renderTrip(trip, dayIdx) {
     const day = trip.days[dayIdx];
-    const dayCost = day.activities.reduce((s, a) => s + costOf(a), 0);
+    const dayCost = fmtCosts(trip, (c) => day.activities.reduce((s, a) => s + costIn(a, trip, c), 0));
     document.title = `${trip.title} · Itineris`;
 
     app.innerHTML = `
@@ -1108,7 +1117,7 @@ import * as data from './data.js';
                <p>新增景點、三餐、住宿或交通。有填開始時間的活動會自動依時間排好；沒填時間的放在最後，可以按住左側把手拖曳調整。</p>
              </div>`}
 
-        ${dayCost > 0 ? `<div class="day-summary"><span>本日花費</span><strong>${fmtMoney(dayCost, trip.currency)}</strong></div>` : ''}
+        ${dayCost ? `<div class="day-summary"><span>本日花費</span><strong>${dayCost}</strong></div>` : ''}
 
         <button class="btn primary block" type="button" data-action="new-activity">${icon('plus', 20)}新增活動</button>
       </section>
@@ -1131,7 +1140,7 @@ import * as data from './data.js';
 
   // 有花費的活動加上標註；這些花費會算進「購買・預算」的花了多少
   const costTag = (a, trip) =>
-    costOf(a) ? `<span class="cost-tag">${icon('wallet', 14)}<span>花費 ${fmtMoney(costOf(a), trip.currency)}${splitLabel(a, trip)}</span></span>` : '';
+    hasCost(a, trip) ? `<span class="cost-tag">${icon('wallet', 14)}<span>花費 ${fmtCosts(trip, (c) => costIn(a, trip, c))}${splitLabel(a, trip)}</span></span>` : '';
 
   // 行程上顯示全額，另外標出分攤方式（只有一個成員時不標）
   // 旅伴的顯示名稱是對方自己可以改的資料，一定要跳脫（資安檢查：儲存型 XSS）
@@ -1837,16 +1846,12 @@ import * as data from './data.js';
       <label class="field"><span>地點</span>
         <input name="location" maxlength="120" value="${esc(a.location?.name || '')}" placeholder="地址或地標名稱" autocomplete="off">
       </label>
-      <div class="field-row">
-        <label class="field"><span>花費（${esc(trip.currency)}）</span>
-          <input type="number" name="cost" min="0" step="any" inputmode="decimal" value="${esc(a.cost ?? '')}" placeholder="0">
-        </label>
+      ${costRow(trip, a, `
         <label class="field"><span>日期</span>
           <select name="day">
             ${trip.days.map((d, i) => `<option value="${i}"${i === dayIdx ? ' selected' : ''}>Day ${i + 1} · ${fmtShort(d.date)}</option>`).join('')}
           </select>
-        </label>
-      </div>
+        </label>`)}
       ${splitFields(trip, a)}
       <label class="field"><span>備註</span>
         <textarea name="note" maxlength="1000" placeholder="訂位代號、營業時間、注意事項">${esc(a.note || '')}</textarea>
@@ -1861,16 +1866,16 @@ import * as data from './data.js';
         const title = fd.get('title').trim();
         const startTime = fd.get('startTime');
         const endTime = fd.get('endTime');
-        const costRaw = fd.get('cost').trim();
-        const cost = costRaw === '' ? undefined : Number(costRaw);
+        const costs = readCosts(fd, trip);
         const locationName = fd.get('location').trim();
         const note = fd.get('note').trim();
         const targetDay = Number(fd.get('day'));
 
         if (!title) return '請填寫名稱';
         if (startTime && endTime && endTime < startTime) return '結束時間不能早於開始時間';
-        if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) return '花費請輸入 0 以上的數字';
-        const split = cost ? readSplit(fd, trip) : undefined;
+        if (Object.values(costs).some((n) => n !== undefined && (!Number.isFinite(n) || n < 0))) return '花費請輸入 0 以上的數字';
+        const paid = Object.values(costs).some((n) => n > 0);
+        const split = paid ? readSplit(fd, trip) : undefined;
         if (typeof split === 'string') return split;
 
         const next = {
@@ -1880,8 +1885,8 @@ import * as data from './data.js';
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           location: locationName ? { ...(activity?.location || {}), name: locationName } : undefined,
-          cost,
-          split: cost ? split : undefined,
+          ...costs,
+          split: paid ? split : undefined,
           note: note || undefined,
         };
 
@@ -1911,22 +1916,52 @@ import * as data from './data.js';
       },
     });
 
-    // 填了花費才顯示「分錢的有誰」，並即時算出每人要分多少
+    // 填了任一個花費才顯示「分錢的有誰」，並即時算出每人要分多少（兩種幣別分開列）
     const who = sheet.querySelector('.split-who');
     if (who) {
-      const costInput = sheet.querySelector('input[name="cost"]');
+      const costInputs = [...sheet.querySelectorAll('input[data-cost]')];
       const each = who.querySelector('.split-each');
       const update = () => {
-        const cost = Number(costInput.value);
-        const ok = costInput.value.trim() !== '' && Number.isFinite(cost) && cost > 0;
-        who.hidden = !ok;
+        const filled = costInputs.map((i) => [i.dataset.cost, Number(i.value)])
+          .filter(([, n]) => Number.isFinite(n) && n > 0);
+        who.hidden = !filled.length;
         const n = who.querySelectorAll('input[name="splitUids"]:checked').length;
-        each.textContent = ok && n ? `每人 ${trip.currency} ${(cost / n).toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : '';
+        each.textContent = filled.length && n
+          ? `每人 ${filled.map(([c, v]) => `${c} ${(v / n).toLocaleString('zh-TW', { maximumFractionDigits: 2 })}`).join(' + ')}`
+          : '';
       };
-      costInput.addEventListener('input', update);
+      costInputs.forEach((i) => i.addEventListener('input', update));
       who.addEventListener('change', update);
       update();
     }
+  }
+
+  // 花費欄位（D-079）：當地幣別與台幣各一格，可以只填一格或兩格都填；目的地用台幣時只有一格。
+  // 只有一格時跟「日期」放同一列
+  const costField = (c) => (c === 'TWD' ? 'costTWD' : 'cost');
+  function costRow(trip, a, dayField) {
+    const cs = costCurrencies(trip);
+    const fields = cs.map((c) => {
+      const name = cs.length === 1 ? 'cost' : costField(c);
+      const value = cs.length === 1 ? costIn(a, trip, c) || a.cost : a[name];
+      return `
+        <label class="field"><span>花費（${curName(c)}）</span>
+          <input type="number" name="${name}" data-cost="${esc(c)}" min="0" step="any" inputmode="decimal" value="${esc(value ?? '')}" placeholder="0">
+        </label>`;
+    }).join('');
+    return cs.length === 1
+      ? `<div class="field-row">${fields}${dayField}</div>`
+      : `<div class="field-row">${fields}</div>${dayField}`;
+  }
+
+  function readCosts(fd, trip) {
+    const num = (k) => {
+      const raw = (fd.get(k) || '').trim();
+      return raw === '' ? undefined : Number(raw);
+    };
+    // 目的地用台幣：只有 cost（舊的 costTWD 已經併進這一格，存檔時拿掉）
+    if (costCurrencies(trip).length === 1) return { cost: num('cost'), costTWD: undefined };
+    return { cost: num('cost'), costTWD: num('costTWD') };
   }
 
   // 花費分攤（D-043、D-078）：填了花費才出現「分錢的有誰」，直接勾成員，預設全部勾選；
@@ -1939,7 +1974,7 @@ import * as data from './data.js';
       : s?.type === 'some' && splitUids(s).length ? splitUids(s)
       : members;
     return `
-      <fieldset class="chips split-who"${a.cost ? '' : ' hidden'}>
+      <fieldset class="chips split-who"${hasCost(a, trip) ? '' : ' hidden'}>
         <legend>分錢的有誰</legend>
         ${members.map((u) => `
           <label class="chip"><input type="checkbox" name="splitUids" value="${esc(u)}"${picked.includes(u) ? ' checked' : ''}><span>${esc(u === me() ? '我' : memberName(trip, u))}</span></label>`).join('')}
