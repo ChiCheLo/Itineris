@@ -125,6 +125,14 @@ describe('個人資料（預算、購買清單、證件）只有本人能讀寫'
     await bobJoins();
     await assertFails(getDoc(doc(as('bob'), 'users/alice/personal/t1')));
   });
+  test('機票存在個人資料：本人可以寫、旅伴讀不到', async () => {
+    await assertSucceeds(setDoc(doc(as('alice'), 'users/alice/personal/t1'), {
+      flights: [{ id: 'f1', flightNo: 'NZ78', from: { code: 'TPE' }, to: { code: 'AKL' } }], fastTrack: { f1: true },
+    }));
+    await bobJoins();
+    await assertFails(getDoc(doc(as('bob'), 'users/alice/personal/t1')));
+    await assertFails(setDoc(doc(as('bob'), 'users/alice/personal/t1'), { flights: [] }));
+  });
   test('簽證與入境資料的項目是共用的：成員都能新增', async () => {
     await bobJoins();
     await assertSucceeds(updateDoc(doc(as('bob'), 'trips/t1'), { visa: [{ id: 'v1', text: 'NZeTA' }], updatedAt: Timestamp.now() }));

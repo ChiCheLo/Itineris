@@ -1453,6 +1453,8 @@ svg.icon { flex: none; display: block; }
 }
 .chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .chip input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.split-each { flex-basis: 100%; margin: 0; font-size: var(--fs-14); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.split-each:empty { display: none; }
 
 .form-error {
   display: flex;

@@ -71,7 +71,8 @@ const INVITE_DAYS = 7;
 // 按「復原」就拿掉。過了這段時間，建立者的 App 下次讀到時才把旅程與每天行程真的刪掉
 const PURGE_AFTER = 60 * 1000;
 // 旅程上舊的 packing（以前共用的攜帶物品）不再寫入，只在個人還沒有自己的清單時拿來當起點（D-075）
-const TRIP_FIELDS = ['title', 'destination', 'startDate', 'endDate', 'currency', 'invitedEmails', 'flights', 'visa'];
+// 旅程上舊的 flights（以前共用的機票）也不再寫入，建立者搬到個人資料後就拿掉（D-077）
+const TRIP_FIELDS = ['title', 'destination', 'startDate', 'endDate', 'currency', 'invitedEmails', 'visa'];
 
 // 護照預設項目用固定 id，每次組出來都一樣
 export const DEFAULT_PASSPORT = { id: 'passport-validity', text: '護照效期已確認', done: false };
@@ -182,6 +183,10 @@ const objects = (v) => (Array.isArray(v) ? v.filter((o) => o && typeof o === 'ob
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const strings = (v) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string') : []);
 
+// 機票（D-077 改成個人）：每個人只看得到自己的機票。改版前旅程上的共用機票只歸建立者，
+// 建立者下次存檔時搬到自己的個人資料，並從旅程上拿掉
+const flightsOf = (t, p) => objects(p?.flights ?? (t?.ownerId === auth.currentUser?.uid ? t?.flights : []));
+
 // 攜帶物品（D-075 改成個人）：自己還沒存過就沿用旅程上舊的共用清單當起點
 const packingOf = (t, p) => objects(p?.packing ?? t?.packing);
 
@@ -216,7 +221,7 @@ function composeTrip(id) {
     memberProfiles: obj(t.memberProfiles),
     invitedEmails: strings(t.invitedEmails),
     days: dateRange(t.startDate, t.endDate).map((date) => ({ date, activities: objects(days.get(date)?.activities) })),
-    flights: objects(t.flights).map((f) => ({ ...f, from: obj(f.from), to: obj(f.to), fastTrack: !!obj(p.fastTrack)[f.id] })),
+    flights: flightsOf(t, p).map((f) => ({ ...f, from: obj(f.from), to: obj(f.to), fastTrack: !!obj(p.fastTrack)[f.id] })),
     prep: {
       packing: packingOf(t, p),
       passport: p.passport ? objects(p.passport) : [DEFAULT_PASSPORT],
@@ -355,6 +360,7 @@ function personalDoc(trip, p = {}) {
     passport: trip.prep?.passport || [],
     packing: trip.prep?.packing || [],
     visaDone: Object.fromEntries((trip.prep?.visa || []).filter((v) => v.done).map((v) => [v.id, true])),
+    flights: (trip.flights || []).map(({ fastTrack, ...f }) => f),
     fastTrack: Object.fromEntries((trip.flights || []).filter((f) => f.fastTrack).map((f) => [f.id, true])),
   };
 }
@@ -410,7 +416,6 @@ export function saveAll(state) {
       endDate: trip.endDate,
       currency: trip.currency,
       invitedEmails: trip.invitedEmails || [],
-      flights: (trip.flights || []).map(({ fastTrack, ...f }) => f),
       visa: (trip.prep?.visa || []).map(({ done, ...v }) => v),
     };
 
@@ -446,12 +451,17 @@ export function saveAll(state) {
         passport: kp?.passport || [DEFAULT_PASSPORT],
         packing: packingOf(raw, kp),
         visaDone: kp?.visaDone || {},
+        flights: kp?.flights, // 還沒存過自己的機票（undefined）就一定寫一次，完成搬移
         fastTrack: kp?.fastTrack || {},
         // 還留著舊版個人簽證清單的話一定要重寫一次，把它拿掉（項目已經併到旅程上）
         ...(kp?.visa ? { visa: kp.visa } : {}),
       };
       if (stable(before) !== stable(personal)) {
         write(setDoc(doc(db, 'users', user.uid, 'personal', trip.id), { ...personal, updatedAt: serverTimestamp() }));
+      }
+      // 舊的共用機票已經搬到建立者自己的個人資料：從旅程上拿掉，旅伴就讀不到
+      if (raw && 'flights' in raw && raw.ownerId === user.uid) {
+        write(updateDoc(tripRef, { flights: deleteField(), updatedAt: serverTimestamp() }));
       }
     }
   }

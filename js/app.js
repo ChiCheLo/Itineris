@@ -1858,8 +1858,6 @@ import * as data from './data.js';
         if ((isNew || Number(fd.get('day')) !== dayIdx) && targetList.length >= MAX_ACTIVITIES_PER_DAY) {
           return `一天最多 ${MAX_ACTIVITIES_PER_DAY} 個活動`;
         }
-        const split = readSplit(fd, trip);
-        if (typeof split === 'string') return split;
         const title = fd.get('title').trim();
         const startTime = fd.get('startTime');
         const endTime = fd.get('endTime');
@@ -1872,6 +1870,8 @@ import * as data from './data.js';
         if (!title) return '請填寫名稱';
         if (startTime && endTime && endTime < startTime) return '結束時間不能早於開始時間';
         if (cost !== undefined && (!Number.isFinite(cost) || cost < 0)) return '花費請輸入 0 以上的數字';
+        const split = cost ? readSplit(fd, trip) : undefined;
+        if (typeof split === 'string') return split;
 
         const next = {
           id: isNew ? uid() : activity.id,
@@ -1911,46 +1911,50 @@ import * as data from './data.js';
       },
     });
 
-    // 選「部分成員」才顯示成員勾選
-    const someBox = sheet.querySelector('.split-some');
-    sheet.querySelectorAll('input[name="split"]').forEach((r) => r.addEventListener('change', () => {
-      if (someBox) someBox.hidden = sheet.querySelector('input[name="split"]:checked')?.value !== 'some';
-    }));
+    // 填了花費才顯示「分錢的有誰」，並即時算出每人要分多少
+    const who = sheet.querySelector('.split-who');
+    if (who) {
+      const costInput = sheet.querySelector('input[name="cost"]');
+      const each = who.querySelector('.split-each');
+      const update = () => {
+        const cost = Number(costInput.value);
+        const ok = costInput.value.trim() !== '' && Number.isFinite(cost) && cost > 0;
+        who.hidden = !ok;
+        const n = who.querySelectorAll('input[name="splitUids"]:checked').length;
+        each.textContent = ok && n ? `每人 ${trip.currency} ${(cost / n).toLocaleString('zh-TW', { maximumFractionDigits: 2 })}` : '';
+      };
+      costInput.addEventListener('input', update);
+      who.addEventListener('change', update);
+      update();
+    }
   }
 
-  // 花費分攤（D-043）：預設全部成員平分；只有一個成員時不顯示
+  // 花費分攤（D-043、D-078）：填了花費才出現「分錢的有誰」，直接勾成員，預設全部勾選；
+  // 只勾一個人＝那個人的個人開銷。只有一個成員時不顯示
   function splitFields(trip, a) {
     const members = membersOf(trip);
     if (members.length < 2) return '';
-    const type = a.split?.type || 'all';
-    const picked = a.split?.type === 'some' ? a.split.uids : members;
-    const radio = (value, label) =>
-      `<label class="chip"><input type="radio" name="split" value="${value}"${type === value ? ' checked' : ''}><span>${label}</span></label>`;
+    const s = a.split;
+    const picked = s?.type === 'self' ? [s.uid]
+      : s?.type === 'some' && splitUids(s).length ? splitUids(s)
+      : members;
     return `
-      <fieldset class="chips">
-        <legend>花費分攤</legend>
-        ${radio('all', `全部 ${members.length} 人平分`)}
-        ${radio('some', '部分成員分攤')}
-        ${radio('self', '只算我（個人開銷）')}
-      </fieldset>
-      <fieldset class="chips split-some"${type === 'some' ? '' : ' hidden'}>
-        <legend>誰要分攤</legend>
+      <fieldset class="chips split-who"${a.cost ? '' : ' hidden'}>
+        <legend>分錢的有誰</legend>
         ${members.map((u) => `
           <label class="chip"><input type="checkbox" name="splitUids" value="${esc(u)}"${picked.includes(u) ? ' checked' : ''}><span>${esc(u === me() ? '我' : memberName(trip, u))}</span></label>`).join('')}
+        <p class="split-each" aria-live="polite"></p>
       </fieldset>`;
   }
 
   function readSplit(fd, trip) {
-    if (membersOf(trip).length < 2) return undefined;
-    const type = fd.get('split') || 'all';
-    if (type === 'self') return { type: 'self', uid: me() };
-    if (type === 'some') {
-      const uids = fd.getAll('splitUids');
-      if (!uids.length) return '請至少勾選一位要分攤的成員';
-      if (uids.length === membersOf(trip).length) return { type: 'all' };
-      return { type: 'some', uids };
-    }
-    return { type: 'all' };
+    const members = membersOf(trip);
+    if (members.length < 2) return undefined;
+    const uids = fd.getAll('splitUids').filter((u) => members.includes(u));
+    if (!uids.length) return '請至少勾選一位分錢的人';
+    if (uids.length === members.length) return { type: 'all' };
+    if (uids.length === 1) return { type: 'self', uid: uids[0] };
+    return { type: 'some', uids };
   }
 
   // ---------- 機票表單 ----------
